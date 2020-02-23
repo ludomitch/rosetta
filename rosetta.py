@@ -372,7 +372,7 @@ class Rosetta:
             "batch_size_test":16,
             "lr" :5e-04,
             "n_epochs":10,
-
+            "NBaseline":10,
             "conv_dict":{
             'InChannels': [2, 8, 16, 32],
             'OutChannels': [8, 16, 32, 64],
@@ -381,7 +381,7 @@ class Rosetta:
             'Padding': [1, 1, 1, 1],
             'MaxPoolDim':2,
             'MaxPoolBool':True
-            }
+            },
 
             "conv_ffnn_dict":{
                 'laser_hidden_layers':[40, 20, latent_space_laser],
@@ -406,6 +406,8 @@ class Rosetta:
         if torch.cuda.is_available():
             torch.backends.cudnn.deterministic = True
             GPU = True
+        else:
+            GPU = False
         device_idx = 0
         if GPU:
             device = torch.device("cuda:" + str(device_idx) if torch.cuda.is_available() else "cpu")
