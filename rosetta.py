@@ -138,59 +138,156 @@ class FeatureExtractor:
             lsr=laser_embeds, feats=features, scores=self.df['scores'].values)
         return res
 
+# MODULES
+class ModelBlock(nn.Module):
+    def __init__(self, block):
+        super(ModelBlock, self).__init__()
+        self.block = nn.Sequential(*block)
+
+    def forward(self, x):
+        out = self.block(x)
+        return out
+
+class View(nn.Module):
+    def __init__(self, shape):
+        super(View, self).__init__()
+        self.shape = shape
+
+    def forward(self, x):
+        return x.view(*self.shape)
 
 class RecursiveNN(nn.Module):
-    def __init__(self, in_features, N1, N2, out_features):
-        super().__init__()
-        self.linear1a = nn.Linear(
-            in_features=in_features, out_features=N1, bias=True
-                                )
-        self.linear2a = nn.Linear(
-            in_features=N1, out_features=N2, bias=True
-        )
-        self.linear3a = nn.Linear(
-            in_features=N2, out_features=out_features, bias=True
-        )
+    def __init__(self, ModelBlock, conv_diction, ffnn_diction, BASELINE_dim = 10):
+        super(RecursiveNN, self).__init__()
 
-        self.linear1b = nn.Linear(
-            in_features=10+out_features, out_features=N1, bias=True
-                                )
-        self.linear2b = nn.Linear(
-            in_features=N1, out_features=N2, bias=True
-        )
-        self.linear3b = nn.Linear(
-            in_features=N2, out_features=1, bias=True
-        )  
-    def forward(self, laser_inputs, other_features):
-        out = self.linear1a(laser_inputs)
-        out = F.relu(out)
-        out = self.linear2a(out)
-        out = F.relu(out)
-        out = self.linear3a(out)
+        self.BASELINE_dim = BASELINE_dim
+        self.Hin = [1024]
+        self.Hout = []
+        self.Win = [1]
+        self.Dropout_p = 0.05
 
-        out = torch.cat((out, other_features), dim=1)
-        out = self.linear1b(out)
-        out = F.relu(out)
-        out = self.linear2b(out)
-        out = F.relu(out)
-        out = self.linear3b(out)
+        # Convolution Variables
+        self.conv_dict = conv_diction
+
+        self.Kszes = conv_diction['Ksze']
+        self.InChannels = conv_diction['InChannels']
+        self.OutChannels = conv_diction['OutChannels']
+        self.Strides = conv_diction['Stride']
+        self.Paddings = conv_diction['Padding']
+
+        self.PoolingDim = self.conv_dict.pop('MaxPoolDim')
+        self.PoolingBool = self.conv_dict.pop('MaxPoolBool')
+
+        # FFNN Variables
+        self.ffnn_dict = ffnn_diction
+
+        self.hidden_laser = ffnn_diction['laser_hidden_layers']
+        self.hidden_mixture = ffnn_diction['mixture_hidden_layers']
+
+        # Convolution of LASER embeddings
+        conv_seq = self.make_conv_layer(ModelBlock)
+
+        # FFNN
+        # Joint features vector from LASER embeddings and BASELINE features
+        ffnn_seq = self.make_ffnn_layer(ModelBlock)
+
+        # Define the model
+        self.conv_seq = conv_seq
+        self.ffnn_seq = ffnn_seq
+
+        # PRINT TO VISUALISE DURING INITIALISATION
+        # print(self.conv_seq)
+        # print()
+        # print(self.ffnn_seq)
+
+    def make_conv_layer(self, ModelBlock):
+        layers = []
+
+        # Create a fully convolutional layer
+        for idx in range(len(self.Strides)):
+
+            self.Hout.append(int((self.Hin[idx]-self.Kszes[idx]+2*self.Paddings[idx])/(self.Strides[idx]) + 1))
+            if idx is not len(self.Strides):
+                self.Hin.append(int(self.Hout[idx]))
+
+            layer_subset = [self.conv_dict[feat][idx] for feat in self.conv_dict.keys()]
+            block = [nn.Conv1d(*layer_subset),
+                     nn.BatchNorm1d(self.OutChannels[idx]),
+                     nn.ReLU(inplace=True),
+                     nn.Dropout(p=self.Dropout_p)]
+            module_block = ModelBlock(block)
+            layers.append(module_block)
+
+        if self.PoolingBool:
+            layers.append(nn.MaxPool1d(self.PoolingDim, self.PoolingDim))
+            self.Hout.append(self.Hout[-1]/self.PoolingDim)
+
+        nfc = int(self.Hout[-1])*int(self.OutChannels[-1])
+        self.hidden_laser.insert(0, nfc)
+
+        layers.append(View((-1,nfc)))
+
+        # Now make a FFNN from convolutional layer output into latent space size
+        for idx in range(len(self.hidden_laser)-1):
+            block = [nn.Linear(self.hidden_laser[idx],self.hidden_laser[idx + 1], bias = True),
+                     nn.ReLU(inplace = True)]
+            module_block = ModelBlock(block)
+            layers.append(module_block)
+
+        return nn.Sequential(*layers)
+
+    def make_ffnn_layer(self, ModelBlock):
+        layers = []
+
+        # Add the mixture FFNN combining baseline with convolution from LASER
+        for idx in range(len(self.hidden_mixture)):
+
+            if idx == 0:
+                block = [nn.Linear(self.hidden_laser[-1] + self.BASELINE_dim, self.hidden_mixture[idx], bias = True),
+                     nn.ReLU(inplace = True)]
+            else:
+                block = [nn.Linear(self.hidden_mixture[idx - 1], self.hidden_mixture[idx], bias = True),
+                    nn.ReLU(inplace = True)]
+
+            module_block = ModelBlock(block)
+            layers.append(module_block)
+
+        return nn.Sequential(*layers)
+
+    def forward(self, laser_inputs, baseline_features):
+
+        out = self.conv_seq(laser_inputs)
+        out = torch.cat([out, baseline_features], dim = 1)
+        out = self.ffnn_seq(out)
 
         return out.view(-1)
 
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
+
+def loss_function(out, label):
+    loss = criterion(out, label)
+    return loss
+
 def train_model(model, train_loader, optimizer, epoch, log_interval=100, scheduler=None, writer=None):
     tloss = 0
-    
+
     for batch_idx, (lsr, feats, targets) in enumerate(train_loader):
         optimizer.zero_grad()
         outputs = model(lsr, feats)
-        
+
         loss = F.mse_loss(outputs, targets)
         tloss +=loss.item()
-        
+
         loss.backward()
-        
+
         optimizer.step()
-        
+
         # if batch_idx % log_interval == 0:
         #     print(
         #         "Train Epoch: {:02d} -- Batch: {:03d} -- Loss: {:.4f}".format(
@@ -199,13 +296,14 @@ def train_model(model, train_loader, optimizer, epoch, log_interval=100, schedul
         #             loss.item(),
         #         )
         #     )
+
     tloss /= 100
     if writer != None:
         writer.add_scalar('Train/Loss', tloss, epoch)
     if scheduler != None:
         scheduler.step()
-            
-            
+
+
 def test_model(model, test_loader, epoch, writer = None):
 
     test_loss = 0.0
@@ -215,7 +313,7 @@ def test_model(model, test_loader, epoch, writer = None):
             outputs = model(lsr, feats)
 
             test_loss += F.mse_loss(outputs, targets, reduction="sum").item()
-            
+
             # pred = outputs.argmax(dim=1, keepdim=True)
 
     test_loss /= len(test_loader.dataset)
@@ -225,6 +323,7 @@ def test_model(model, test_loader, epoch, writer = None):
     #         test_loss
     #     )
     # )
+
     if writer != None:
         writer.add_scalar('Test/Loss', test_loss, epoch)
 
@@ -262,51 +361,84 @@ class Rosetta:
             dev = namedtuple("res", ['lsr', 'feats', 'scores'])(
                 lsr=devlsr, feats=devnlp, scores=devsc)
 
-        batch_size_train = 300
-        batch_size_test = 100
+        # Feature Extractor Size from LASER Embeddings
+        latent_space_laser = 10
 
-        params = {
-            "N1" : 16,
-            "N2" : 16,
-            "lr" : 0.0001,
-            "step_size" : 20,
+        hyperParams = {
+            "step_size" : 2,
             "gamma" : 0.8,
-            #"batch_size" : 50,
-            "normalising" : False
+            "normalising" : False,
+            "batch_size_train" : 128,
+            "batch_size_test":16,
+            "lr" :5e-04,
+            "n_epochs":10,
+
+            "conv_dict":{
+            'InChannels': [2, 8, 16, 32],
+            'OutChannels': [8, 16, 32, 64],
+            'Ksze': [4, 4, 4, 4],
+            'Stride': [2, 2, 2, 2],
+            'Padding': [1, 1, 1, 1],
+            'MaxPoolDim':2,
+            'MaxPoolBool':True
+            }
+
+            "conv_ffnn_dict":{
+                'laser_hidden_layers':[40, 20, latent_space_laser],
+                'mixture_hidden_layers':[8, 1]
+            }
+
         }
 
-
         train_ = data_utils.TensorDataset(*[torch.tensor(getattr(train, i)).float() for i in ['lsr', 'feats', 'scores']])
-        train_loader = data_utils.DataLoader(train_, batch_size = batch_size_train, shuffle = True)
+        train_loader = data_utils.DataLoader(train_, batch_size = hyperParams["batch_size_train"], shuffle = True)
 
         dev_ = data_utils.TensorDataset(*[torch.tensor(getattr(dev, i)).float() for i in ['lsr', 'feats', 'scores']])
-        dev_loader = data_utils.DataLoader(dev_, batch_size = batch_size_test, shuffle = True)
+        dev_loader = data_utils.DataLoader(dev_, batch_size = hyperParams["batch_size_test"], shuffle = True)
 
         # test_ = data_utils.TensorDataset(*[torch.tensor(getattr(test, i)) for i in ['lsr', 'feats', 'scores']])
         # test_loader = data_utils.DataLoader(test_, batch_size = batch_size_test, shuffle = True)
 
+        weights_initialiser = True
 
-        model = RecursiveNN(in_features=2048, N1=params["N1"], N2=params["N2"], out_features=5) # 2048
+        # We set a random seed to ensure that your results are reproducible.
+        # Also set a cuda GPU if available
+        if torch.cuda.is_available():
+            torch.backends.cudnn.deterministic = True
+            GPU = True
+        device_idx = 0
+        if GPU:
+            device = torch.device("cuda:" + str(device_idx) if torch.cuda.is_available() else "cpu")
+        else:
+            device = torch.device("cpu")
+        print(device)
 
-        optimizer = optim.Adam(model.parameters(), lr=params["lr"])
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=params["step_size"],gamma=params["gamma"])
-        scheduler = None
+        model = RecursiveNN(ModelBlock, hyperParams["conv_dict"], hyperParams["conv_ffnn_dict"], BASELINE_dim=hyperParams["NBaseline"])
+        model = model.to(device)
 
+        if weights_initialiser:
+            model.apply(weights_init)
+        params_net = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print("Total number of parameters in Model is: {}".format(params_net))
+        print(model)
+
+        optimizer = optim.Adam(model.parameters(), lr=hyperParams["lr"])
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=hyperParams["step_size"],gamma=hyperParams["gamma"])
         writer = SummaryWriter(logdir + "8")
 
-        for epoch in range(100):
-            train_model(model, train_loader, optimizer, epoch, log_interval=1000,scheduler=scheduler, writer = writer)
+        # Main Training Loop
+        for epoch in range(hyperParams['n_epochs']):
+            train_model(model, train_loader, optimizer, epoch, log_interval=1000, scheduler=scheduler, writer = writer)
             test_model(model, dev_loader, epoch, writer = writer)
 
-
 if __name__=="__main__":
+
     parser = argparse.ArgumentParser(description='Process input args')
     parser.add_argument('mode', type=str, nargs='+',
                         help='extract or no-extract')
     args = parser.parse_args().__dict__
 
     ros = Rosetta(args['mode'][0]).run()
-
 
 # OTher features
 # Count numbers, count capital words
