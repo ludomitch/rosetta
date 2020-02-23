@@ -8,11 +8,11 @@ import csv
 import string
 
 # NLP
-from textblob_de import TextBlobDE as TBD
-from textblob import TextBlob as TBE
-import spacy
-import language_check
-from laserembeddings import Laser
+# from textblob_de import TextBlobDE as TBD
+# from textblob import TextBlob as TBE
+# import spacy
+# import language_check
+# from laserembeddings import Laser
 
 # ML
 from sklearn.preprocessing import Normalizer
@@ -242,7 +242,7 @@ class RecursiveNN(nn.Module):
         layers = []
 
         # Add the mixture FFNN combining baseline with convolution from LASER
-        for idx in range(len(self.hidden_mixture)):
+        for idx in range(len(self.hidden_mixture) - 1):
 
             if idx == 0:
                 block = [nn.Linear(self.hidden_laser[-1] + self.BASELINE_dim, self.hidden_mixture[idx], bias = True),
@@ -254,23 +254,33 @@ class RecursiveNN(nn.Module):
             module_block = ModelBlock(block)
             layers.append(module_block)
 
+        block = [nn.Linear(self.hidden_mixture[idx], self.hidden_mixture[idx + 1], bias = True)]
+        module_block = ModelBlock(block)
+        layers.append(module_block)
+
         return nn.Sequential(*layers)
 
     def forward(self, laser_inputs, baseline_features):
 
         out = self.conv_seq(laser_inputs)
-        out = torch.cat([out, baseline_features], dim = 1)
+        out = torch.cat((out, baseline_features), dim = 1)
         out = self.ffnn_seq(out)
 
+        # out = self.ffnn_seq(baseline_features)
         return out.view(-1)
 
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        m.weight.data.normal_(0.0, 0.02)
+        torch.nn.init.kaiming_normal_(m.weight)
+        if m.bias is not None:
+            torch.nn.init.zeros_(m.bias)
     elif classname.find('BatchNorm') != -1:
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
+    elif isinstance(m, torch.nn.Linear):
+        torch.nn.init.xavier_uniform_(m.weight)
+        torch.nn.init.zeros_(m.bias)
 
 def loss_function(out, label):
     loss = criterion(out, label)
@@ -282,7 +292,6 @@ def train_model(model, train_loader, optimizer, epoch, log_interval=100, schedul
     for batch_idx, (lsr, feats, targets) in enumerate(train_loader):
         optimizer.zero_grad()
         outputs = model(lsr, feats)
-
         loss = F.mse_loss(outputs, targets)
         tloss +=loss.item()
 
@@ -300,6 +309,7 @@ def train_model(model, train_loader, optimizer, epoch, log_interval=100, schedul
         #     )
 
     tloss /= 100
+    print("Loss \t" + str(tloss))
     if writer != None:
         writer.add_scalar('Train/Loss', tloss, epoch)
     if scheduler != None:
@@ -350,13 +360,13 @@ class Rosetta:
             np.save("saved_features/dev_scores", dev.scores)
         else: # Load saved extracted features
             print("Loading saved features")
-            trainlsr = np.load("saved_features/train_lsr.npy", allow_pickle=True)
-            trainnlp = np.load("saved_features/train_nlp.npy", allow_pickle=True)
-            trainsc = np.load("saved_features/train_scores.npy", allow_pickle=True)
+            trainlsr = np.load("saved_features/saved_features/train_lsr.npy", allow_pickle=True)
+            trainnlp = np.load("saved_features/saved_features/train_nlp.npy", allow_pickle=True)
+            trainsc = np.load("saved_features/saved_features/train_scores.npy", allow_pickle=True)
 
-            devlsr = np.load("saved_features/dev_lsr.npy",  allow_pickle=True)
-            devnlp = np.load("saved_features/dev_nlp.npy", allow_pickle=True)
-            devsc = np.load("saved_features/dev_scores.npy", allow_pickle=True)
+            devlsr = np.load("saved_features/saved_features/dev_lsr.npy",  allow_pickle=True)
+            devnlp = np.load("saved_features/saved_features/dev_nlp.npy", allow_pickle=True)
+            devsc = np.load("saved_features/saved_features/dev_scores.npy", allow_pickle=True)
 
             train = namedtuple("res", ['lsr', 'feats', 'scores'])(
                         lsr=trainlsr, feats=trainnlp, scores=trainsc)
@@ -364,30 +374,30 @@ class Rosetta:
                 lsr=devlsr, feats=devnlp, scores=devsc)
 
         # Feature Extractor Size from LASER Embeddings
-        latent_space_laser = 10
+        latent_space_laser = 16
 
         hyperParams = {
             "step_size" : 2,
-            "gamma" : 0.8,
+            "gamma" : 0.9,
             "normalising" : False,
-            "batch_size_train" : 128,
+            "batch_size_train" : 64,
             "batch_size_test":16,
             "lr" :5e-04,
-            "n_epochs":10,
+            "n_epochs":100,
             "NBaseline":10,
             "conv_dict":{
-            'InChannels': [2, 8, 16, 32],
-            'OutChannels': [8, 16, 32, 64],
-            'Ksze': [4, 4, 4, 4],
-            'Stride': [2, 2, 2, 2],
-            'Padding': [1, 1, 1, 1],
+            'InChannels': [2, 8, 16, 32, 64],
+            'OutChannels': [8, 16, 32, 64, 4],
+            'Ksze': [4, 4, 4, 4, 1],
+            'Stride': [2, 2, 2, 2, 1],
+            'Padding': [1, 1, 1, 1, 0],
             'MaxPoolDim':2,
             'MaxPoolBool':True
             },
 
             "conv_ffnn_dict":{
-                'laser_hidden_layers':[40, 20, latent_space_laser],
-                'mixture_hidden_layers':[8, 1]
+                'laser_hidden_layers':[48, latent_space_laser],
+                'mixture_hidden_layers':[24, 12, 1]
             }
 
         }
