@@ -91,7 +91,9 @@ class FeatureExtractor:
     def laser_embeddings(self):
         src = self.laser.embed_sentences(self.df['src'].tolist(), lang='en') # (N, 1024)
         tgt = self.laser.embed_sentences(self.df['tgt'].tolist(), lang='de') # (N, 1024)
-        res = np.concatenate((src,tgt),axis=1) # (N, 2048) array
+        res = np.zeros((src.shape[0],2,1024)) # (N, 2, 1024) ndarray
+        res[:,0,:]= src
+        res[:,1,:] = tgt
         return res
 
     def features(self):
