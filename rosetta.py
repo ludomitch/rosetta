@@ -250,9 +250,9 @@ class Rosetta:
             "gamma" : 0.5,
             #"batch_size" : 50,
             "normalising" : False,
-            "epochs": 30,
+            "epochs": 80,
             'upsampling_factor':3000,
-            'upsample': True
+            'upsample': False
         }
 
     def preprocess(self, scores, lsr, nlp):
@@ -288,8 +288,12 @@ class Rosetta:
             final_nlp = filtered_nlp[idxs]
             final_scores = scaled_scores[idxs]
 
-            res = namedtuple("res", ['lsr', 'feats', 'scores'])(
-                        lsr=final_lsr, feats=final_nlp, scores=final_scores)
+        else:
+            final_lsr = lsr
+            final_nlp = nlp
+            final_scores = scores            
+        res = namedtuple("res", ['lsr', 'feats', 'scores'])(
+                    lsr=final_lsr, feats=final_nlp, scores=final_scores)
 
         return res
 
@@ -355,7 +359,7 @@ class Rosetta:
 
         for epoch in range(params['epochs']):
             train_model(model, train_loader, optimizer, epoch, log_interval=1000,scheduler=scheduler, writer = writer)
-            test_model(model, dev_loader, epoch, writer = writer, scaler=self.scaler, self.params['upsample'])
+            test_model(model, dev_loader, epoch, writer = writer, scaler=self.scaler, upsample=self.params['upsample'])
 
         # os.mkdir("./models/" + date_string)
         # torch.save(model, "./models/"+date_string+"/model.pt")
