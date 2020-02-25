@@ -22,6 +22,7 @@ import torch.nn.functional as F
 import torch.utils.data as data_utils
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
+import datetime
 
 # Unused stuff
 # import nltk
@@ -308,7 +309,7 @@ def train_model(model, train_loader, optimizer, epoch, log_interval=100, schedul
         #         )
         #     )
 
-    tloss /= 100
+    tloss /= 512
     print("Loss \t" + str(tloss))
     if writer != None:
         writer.add_scalar('Train/Loss', tloss, epoch)
@@ -329,7 +330,7 @@ def test_model(model, test_loader, epoch, writer = None):
             # pred = outputs.argmax(dim=1, keepdim=True)
 
     test_loss /= len(test_loader.dataset)
-
+    print(" TEST LOSS \t" + str(test_loss))
     # print(
     #     "\nTest set: Average loss: {:.4f}\n".format(
     #         test_loss
@@ -341,8 +342,15 @@ def test_model(model, test_loader, epoch, writer = None):
 
 class Rosetta:
     """Rosetta stone classifier"""
-    def __init__(self, mode='extract'):
+    def __init__(self, mode='extract', bSave = 'T'):
         self.mode = mode
+        if bSave is 'T':
+            print('GONE SAVE')
+            self.bSave = False
+        else:
+            print('AINT GONE SAVE')
+            print('Please specify F or T next time, setting false .......')
+            self.bSave = False
 
     def run(self):
         if self.mode == 'extract':
@@ -374,30 +382,31 @@ class Rosetta:
                 lsr=devlsr, feats=devnlp, scores=devsc)
 
         # Feature Extractor Size from LASER Embeddings
-        latent_space_laser = 16
+        latent_space_laser = 12
 
         hyperParams = {
             "step_size" : 2,
             "gamma" : 0.9,
             "normalising" : False,
-            "batch_size_train" : 64,
-            "batch_size_test":16,
-            "lr" :5e-04,
+            "batch_size_train" : 512,
+            "batch_size_test":128,
+            "lr" :2e-04,
             "n_epochs":100,
             "NBaseline":10,
+            # 'NBaseline':0,
             "conv_dict":{
-            'InChannels': [2, 8, 16, 32, 64],
-            'OutChannels': [8, 16, 32, 64, 4],
-            'Ksze': [4, 4, 4, 4, 1],
-            'Stride': [2, 2, 2, 2, 1],
-            'Padding': [1, 1, 1, 1, 0],
-            'MaxPoolDim':2,
+            'InChannels': [2, 32, 64],
+            'OutChannels': [32, 64, 4],
+            'Ksze': [2, 2, 2],
+            'Stride': [1, 1, 1],
+            'Padding': [1, 1, 1],
+            'MaxPoolDim':4,
             'MaxPoolBool':True
             },
 
             "conv_ffnn_dict":{
-                'laser_hidden_layers':[48, latent_space_laser],
-                'mixture_hidden_layers':[24, 12, 1]
+                'laser_hidden_layers':[24, latent_space_laser],
+                'mixture_hidden_layers':[12, 1]
             }
 
         }
@@ -438,21 +447,31 @@ class Rosetta:
 
         optimizer = optim.Adam(model.parameters(), lr=hyperParams["lr"])
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=hyperParams["step_size"],gamma=hyperParams["gamma"])
-        writer = SummaryWriter(logdir + "8")
+
+        date_string = str(datetime.datetime.now())[:16].replace(":", "-").replace(" ", "-")
+        writer = SummaryWriter(logdir + date_string)
 
         # Main Training Loop
         for epoch in range(hyperParams['n_epochs']):
             train_model(model, train_loader, optimizer, epoch, log_interval=1000, scheduler=scheduler, writer = writer)
             test_model(model, dev_loader, epoch, writer = writer)
 
+        if self.bSave:
+            torch.save(model,"model.pt")
+
 if __name__=="__main__":
 
     parser = argparse.ArgumentParser(description='Process input args')
+
     parser.add_argument('mode', type=str, nargs='+',
                         help='extract or no-extract')
+
+    parser.add_argument('save', type=str, nargs='+',
+                        help='T / F for save or not save')
+
     args = parser.parse_args().__dict__
 
-    ros = Rosetta(args['mode'][0]).run()
+    ros = Rosetta(args['mode'][0], args['save'][0]).run()
 
 # OTher features
 # Count numbers, count capital words
