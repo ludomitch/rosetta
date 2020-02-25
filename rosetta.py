@@ -237,6 +237,8 @@ def test_model(model, test_loader, epoch, writer = None, scaler=None, upsample=F
     if writer != None:
         writer.add_scalar('Test/Loss', test_loss, epoch)
 
+    return test_loss
+
 class Rosetta:
     """Rosetta stone classifier"""
     def __init__(self, mode='extract'):
@@ -248,11 +250,12 @@ class Rosetta:
             "lr" : 0.0001,
             "step_size" : 60,
             "gamma" : 0.5,
-            #"batch_size" : 50,
+            "batch_size_train" : 300,
+            "batch_size_test": 100,
             "normalising" : False,
-            "epochs": 80,
+            "epochs": 100,
             'upsampling_factor':3000,
-            'upsample': False
+            'upsample': True
         }
 
     def preprocess(self, scores, lsr, nlp):
@@ -332,17 +335,14 @@ class Rosetta:
         train = self.preprocess(trainsc, trainlsr, trainnlp)
 
 
-
         params = self.params
-        batch_size_train = 300
-        batch_size_test = 100
 
 
         train_ = data_utils.TensorDataset(*[torch.tensor(getattr(train, i)).float() for i in ['lsr', 'feats', 'scores']])
-        train_loader = data_utils.DataLoader(train_, batch_size = batch_size_train, shuffle = True)
+        train_loader = data_utils.DataLoader(train_, batch_size = params['batch_size_train'], shuffle = True)
 
         dev_ = data_utils.TensorDataset(*[torch.tensor(getattr(dev, i)).float() for i in ['lsr', 'feats', 'scores']])
-        dev_loader = data_utils.DataLoader(dev_, batch_size = batch_size_test, shuffle = True)
+        dev_loader = data_utils.DataLoader(dev_, batch_size = params['batch_size_test'], shuffle = True)
 
         # test_ = data_utils.TensorDataset(*[torch.tensor(getattr(test, i)) for i in ['lsr', 'feats', 'scores']])
         # test_loader = data_utils.DataLoader(test_, batch_size = batch_size_test, shuffle = True)
@@ -356,11 +356,14 @@ class Rosetta:
 
         date_string = str(datetime.datetime.now())[:16].replace(":", "-").replace(" ", "-")
         writer = SummaryWriter(logdir + date_string)
-
+        running_test_loss = 1000
         for epoch in range(params['epochs']):
             train_model(model, train_loader, optimizer, epoch, log_interval=1000,scheduler=scheduler, writer = writer)
-            test_model(model, dev_loader, epoch, writer = writer, scaler=self.scaler, upsample=self.params['upsample'])
-
+            test_loss = test_model(model, dev_loader, epoch, writer = writer, scaler=self.scaler, upsample=self.params['upsample'])
+            if (test_loss-running_test_loss)>0.02:
+                break
+            else:
+                running_test_loss=test_loss
         # os.mkdir("./models/" + date_string)
         # torch.save(model, "./models/"+date_string+"/model.pt")
         # with open("./models/"+ date_string+'/params.txt', 'w+') as json_file:
