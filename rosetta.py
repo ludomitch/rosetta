@@ -27,6 +27,7 @@ import torch.utils.data as data_utils
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
 
+from models import RecursiveNN, RecursiveNN_Linear, ModelBlock, View, weights_init
 # Unused stuff
 # import nltk
 # from scipy.spatial.distance import cdist
@@ -144,71 +145,32 @@ class FeatureExtractor:
             lsr=laser_embeds, feats=features, scores=self.df['scores'].values)
         return res
 
-# MODULES
-class RecursiveNN(nn.Module):
-    def __init__(self, in_features, N1, N2, out_features):
-        super().__init__()
-        self.linear1a = nn.Linear(
-            in_features=in_features, out_features=N1, bias=True
-                                )
-        self.linear2a = nn.Linear(
-            in_features=N1, out_features=N2, bias=True
-        )
-        self.linear3a = nn.Linear(
-            in_features=N2, out_features=out_features, bias=True
-        )
-
-        self.linear1b = nn.Linear(
-            in_features=10+out_features, out_features=N1, bias=True
-                                )
-        self.linear2b = nn.Linear(
-            in_features=N1, out_features=N2, bias=True
-        )
-        self.linear3b = nn.Linear(
-            in_features=N2, out_features=1, bias=True
-        )  
-    def forward(self, laser_inputs, other_features):
-        out = self.linear1a(laser_inputs)
-        out = F.relu(out)
-        out = self.linear2a(out)
-        out = F.relu(out)
-        out = self.linear3a(out)
-
-        out = torch.cat((out, other_features), dim=1)
-        out = self.linear1b(out)
-        out = F.relu(out)
-        out = self.linear2b(out)
-        out = F.relu(out)
-        out = self.linear3b(out)
-
-        return out.view(-1)
-
 def train_model(model, train_loader, optimizer, epoch, log_interval=100, scheduler=None, writer=None):
     tloss = 0
-    
+
     for batch_idx, (lsr, feats, targets) in enumerate(train_loader):
         optimizer.zero_grad()
         outputs = model(lsr, feats)
-        
+
         loss = F.mse_loss(outputs, targets.view(-1))
         tloss +=loss.item()
-        
+
         loss.backward()
-        
+
         optimizer.step()
-        
+
         # if batch_idx % log_interval == 0:
 
     # tloss /= len(train_loader.dataset)
-    # print(
-    #     "Train Epoch: {:02d} -- Batch: {:03d} -- Loss: {:.4f}".format(
-    #         epoch,
-    #         batch_idx,
-    #         tloss,
-    #     )
-    # )
+    print(
+        "Train Epoch: {:02d} -- Batch: {:03d} -- Loss: {:.4f}".format(
+            epoch,
+            batch_idx,
+            tloss,
+        )
+    )
 
-    if writer is not None:
+    if writer != None:
         writer.add_scalar('Train/Loss', tloss, epoch)
     if scheduler is not None:
         scheduler.step()
@@ -223,52 +185,88 @@ def test_model(model, test_loader, epoch, writer = None, scaler=None, upsample=F
             outputs = model(lsr, feats)
             if upsample:
                 targets = torch.tensor(scaler.transform(targets.reshape(-1,1)).ravel())
+                targets = targets.float()
             test_loss += F.mse_loss(outputs, targets).item()
-            
+
             # pred = outputs.argmax(dim=1, keepdim=True)
 
     # test_loss /= len(test_loader.dataset)
 
-    # print(
-    #     "\nTest set: Average loss: {:.4f}\n".format(
-    #         test_loss
-    #     )
-    # )
+    print(
+        "\nTest set: Average loss: {:.4f}\n".format(
+            test_loss
+        )
+    )
     if writer != None:
         writer.add_scalar('Test/Loss', test_loss, epoch)
 
-    if score:
-        df = pd.DataFrame({'real':targets, 'preds':outputs}).fillna(0)
-        # display(df)
-        df = df.corr().fillna(0)
-        # display(df)
-        score = df['preds']['real']
-        return test_loss, score
-    else:
-        return test_loss
+    return test_loss
 
 class Rosetta:
     """Rosetta stone classifier"""
-    def __init__(self, mode='extract'):
+    def __init__(self, mode='extract', bSave = 'T', bUseConv = False):
         self.mode = mode
         self.scaler = None
-        self.params = {
-            "N1" : 32,
-            "N2" : 32,
-            "lr" : 5e-5,
-            "step_size" : 60,
-            "gamma" : 0.5,
-            "batch_size_train" : 300,
-            "batch_size_test": 100,
-            "normalising" : False,
-            "epochs": 200,
-            'upsampling_factor':3000,
-            'upsample': False
-        }
+
+        if bSave is 'T':
+            print('GONE SAVE')
+            self.bSave = False
+        else:
+            print('AINT GONE SAVE')
+            print('Please specify F or T next time, setting false .......')
+            self.bSave = False
+
+        self.latent_space_laser = 24
+        self.bUseConv = bUseConv
+
+        if self.bUseConv:
+            self.params = {
+                "step_size" : 2,
+                "gamma" : 0.9,
+                "normalising" : False,
+                "batch_size_train" : 512,
+                "batch_size_test":256,
+                "lr" :2e-04,
+                "epochs":50,
+                "NBaseline":10,
+                'upsampling_factor':7000,
+                'upsample': True,
+
+                "conv_dict":{
+                'InChannels': [2, 8],
+                'OutChannels': [8, 1],
+                'Ksze': [2, 2],
+                'Stride': [2, 2],
+                'Padding': [1, 1],
+                'MaxPoolDim':1,
+                'MaxPoolBool':True},
+
+                "conv_ffnn_dict":{
+                    'laser_hidden_layers':[24, self.latent_space_laser],
+                    'mixture_hidden_layers':[12, 1]}
+                }
+        else:
+            self.params = {
+                "N1" : 32,
+                "N2" : 32,
+                "lr" : 5e-5,
+                "step_size" : 60,
+                "gamma" : 0.5,
+                "batch_size_train" : 300,
+                "batch_size_test": 100,
+                "normalising" : False,
+                "epochs": 200,
+                'upsampling_factor':3000,
+                'upsample': False
+            }
+
 
     def preprocess(self, scores, lsr, nlp):
 
         if self.params['upsample']:
+
+            if self.bUseConv:
+                lsr = lsr.reshape(-1, 2048)
             scores = scores.reshape(-1,1)
 
             idxs = np.nonzero((scores.ravel()<1.6)&(scores.ravel()>-2.5)) # Get indices to keep
@@ -310,6 +308,9 @@ class Rosetta:
             final_nlp = np.concatenate([filtered_nlp, augemented_nlp],axis=0)
             final_scores = np.concatenate([filtered_scores, augmented_scores],axis=0)
 
+            if self.bUseConv:
+                final_lsr = final_lsr.reshape(-1, 2, 1024)
+
         else:
             final_lsr = lsr
             final_nlp = nlp
@@ -344,18 +345,16 @@ class Rosetta:
             devnlp = np.load("saved_features/dev_nlp.npy", allow_pickle=True)
             devsc = np.load("saved_features/dev_scores.npy", allow_pickle=True)
 
-            trainlsr = trainlsr.reshape(-1, 2048)
-            devlsr = devlsr.reshape(-1, 2048)
+            if not self.bUseConv:
+                trainlsr = trainlsr.reshape(-1, 2048)
+                devlsr = devlsr.reshape(-1, 2048)
 
         dev = namedtuple("res", ['lsr', 'feats', 'scores'])(
             lsr=devlsr, feats=devnlp, scores=devsc)
 
-
         train = self.preprocess(trainsc, trainlsr, trainnlp)
 
-
         params = self.params
-
 
         train_ = data_utils.TensorDataset(*[torch.tensor(getattr(train, i)).float() for i in ['lsr', 'feats', 'scores']])
         train_loader = data_utils.DataLoader(train_, batch_size = params['batch_size_train'], shuffle = True)
@@ -366,8 +365,33 @@ class Rosetta:
         # test_ = data_utils.TensorDataset(*[torch.tensor(getattr(test, i)) for i in ['lsr', 'feats', 'scores']])
         # test_loader = data_utils.DataLoader(test_, batch_size = batch_size_test, shuffle = True)
 
+        # We set a random seed to ensure that your results are reproducible.
+        # Also set a cuda GPU if available
+        if torch.cuda.is_available():
+            torch.backends.cudnn.deterministic = True
+            GPU = True
+        else:
+            GPU = False
+        device_idx = 0
+        if GPU:
+            device = torch.device("cuda:" + str(device_idx) if torch.cuda.is_available() else "cpu")
+        else:
+            device = torch.device("cpu")
+        print(device)
 
-        model = RecursiveNN(in_features=2048, N1=params["N1"], N2=params["N2"], out_features=5) # 2048
+        if self.bUseConv:
+            model = RecursiveNN(ModelBlock, params["conv_dict"], params["conv_ffnn_dict"], BASELINE_dim=params["NBaseline"])
+        else:
+            model = RecursiveNN_Linear(in_features=2048, N1=params["N1"], N2=params["N2"], out_features=5) # 2048
+
+        model = model.to(device)
+
+        weights_initialiser = True
+        if weights_initialiser:
+            model.apply(weights_init)
+        params_net = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print("Total number of parameters in Model is: {}".format(params_net))
+        print(model)
 
         optimizer = optim.Adam(model.parameters(), lr=params["lr"])
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=params["step_size"],gamma=params["gamma"])
@@ -396,7 +420,12 @@ if __name__=="__main__":
                         help='extract or no-extract')
     args = parser.parse_args().__dict__
 
-    ros = Rosetta(args['mode'][0]).run()
+    parser.add_argument('save', type=str, nargs='+',
+                        help='T / F for save or not save')
+
+    args = parser.parse_args().__dict__
+
+    ros = Rosetta(args['mode'][0], args['save'][0]).run()
 
 # OTher features
 # Count numbers, count capital words
