@@ -190,7 +190,7 @@ def train_model(model, train_loader, optimizer, epoch, log_interval=100, schedul
         optimizer.zero_grad()
         outputs = model(lsr, feats)
         
-        loss = F.mse_loss(outputs, targets)
+        loss = F.mse_loss(outputs, targets.view(-1))
         tloss +=loss.item()
         
         loss.backward()
@@ -200,21 +200,21 @@ def train_model(model, train_loader, optimizer, epoch, log_interval=100, schedul
         # if batch_idx % log_interval == 0:
 
     # tloss /= len(train_loader.dataset)
-    print(
-        "Train Epoch: {:02d} -- Batch: {:03d} -- Loss: {:.4f}".format(
-            epoch,
-            batch_idx,
-            tloss,
-        )
-    )
+    # print(
+    #     "Train Epoch: {:02d} -- Batch: {:03d} -- Loss: {:.4f}".format(
+    #         epoch,
+    #         batch_idx,
+    #         tloss,
+    #     )
+    # )
 
-    if writer != None:
+    if writer is not None:
         writer.add_scalar('Train/Loss', tloss, epoch)
-    if scheduler != None:
+    if scheduler is not None:
         scheduler.step()
             
             
-def test_model(model, test_loader, epoch, writer = None, scaler=None, upsample=False):
+def test_model(model, test_loader, epoch, writer = None, scaler=None, upsample=False, score=True):
 
     test_loss = 0.0
 
@@ -229,15 +229,23 @@ def test_model(model, test_loader, epoch, writer = None, scaler=None, upsample=F
 
     # test_loss /= len(test_loader.dataset)
 
-    print(
-        "\nTest set: Average loss: {:.4f}\n".format(
-            test_loss
-        )
-    )
+    # print(
+    #     "\nTest set: Average loss: {:.4f}\n".format(
+    #         test_loss
+    #     )
+    # )
     if writer != None:
         writer.add_scalar('Test/Loss', test_loss, epoch)
 
-    return test_loss
+    if score:
+        df = pd.DataFrame({'real':targets, 'preds':outputs}).fillna(0)
+        # display(df)
+        df = df.corr().fillna(0)
+        # display(df)
+        score = df['preds']['real']
+        return test_loss, score
+    else:
+        return test_loss
 
 class Rosetta:
     """Rosetta stone classifier"""
@@ -247,15 +255,15 @@ class Rosetta:
         self.params = {
             "N1" : 32,
             "N2" : 32,
-            "lr" : 0.0001,
+            "lr" : 5e-5,
             "step_size" : 60,
             "gamma" : 0.5,
             "batch_size_train" : 300,
             "batch_size_test": 100,
             "normalising" : False,
-            "epochs": 100,
+            "epochs": 200,
             'upsampling_factor':3000,
-            'upsample': True
+            'upsample': False
         }
 
     def preprocess(self, scores, lsr, nlp):
@@ -275,7 +283,7 @@ class Rosetta:
             n, bins, patches = plt.hist(scaled_scores, 15, density=True, range=(-1, 1), facecolor='g', alpha=0.75)
 
             prob_dist = np.ones(len(n))-n*0.45
-            prob_dist = prob_dist/sum(prob_dist)
+            prob_dist = prob_dist**15/sum(prob_dist)
 
             dump(self.scaler, 'scaler.joblib')
 
@@ -285,11 +293,22 @@ class Rosetta:
                 probs[(scaled_scores>bins[idx])&(scaled_scores<bins[idx+1])] = 1*prob_dist[idx]
             scaled_probs = probs/sum(probs)
 
-            idxs = np.random.choice(list(range(len(scaled_scores))), p=scaled_probs, size=len(scores)+self.params['upsampling_factor'])
+            idxs = np.random.choice(list(range(len(scaled_scores))), p=scaled_probs, size=self.params['upsampling_factor'])
 
-            final_lsr = filtered_lsr[idxs]
-            final_nlp = filtered_nlp[idxs]
-            final_scores = scaled_scores[idxs]
+            augmented_lsr = np.zeros((len(idxs), lsr.shape[1]))
+            augemented_nlp = np.zeros((len(idxs), nlp.shape[1]))
+            augmented_scores = np.zeros((len(idxs), scores.shape[1]))
+            lsr_std = filtered_lsr.std(axis=0)
+            nlp_std = filtered_nlp.std(axis=0)
+            scores_std = filtered_scores.std(axis=0)
+            for i, value in enumerate(idxs):
+                augmented_lsr[i,:] = filtered_lsr[value, :]+ np.random.normal(0, lsr_std*0.05, lsr.shape[1])
+                augemented_nlp[i,:] = filtered_nlp[value, :]+ np.random.normal(0, nlp_std*0.05, nlp.shape[1])
+                augmented_scores[i,:] = filtered_scores[value, :]+ np.random.normal(0, scores_std*.05, scores.shape[1])
+
+            final_lsr = np.concatenate([filtered_lsr, augmented_lsr],axis=0)
+            final_nlp = np.concatenate([filtered_nlp, augemented_nlp],axis=0)
+            final_scores = np.concatenate([filtered_scores, augmented_scores],axis=0)
 
         else:
             final_lsr = lsr
@@ -357,10 +376,11 @@ class Rosetta:
         date_string = str(datetime.datetime.now())[:16].replace(":", "-").replace(" ", "-")
         writer = SummaryWriter(logdir + date_string)
         running_test_loss = 1000
+        print('Running model')
         for epoch in range(params['epochs']):
             train_model(model, train_loader, optimizer, epoch, log_interval=1000,scheduler=scheduler, writer = writer)
-            test_loss = test_model(model, dev_loader, epoch, writer = writer, scaler=self.scaler, upsample=self.params['upsample'])
-            if (test_loss-running_test_loss)>0.02:
+            test_loss = test_model(model, dev_loader, epoch, writer = writer, scaler=self.scaler, upsample=self.params['upsample'], score=False)
+            if (test_loss-running_test_loss)>0.01:
                 break
             else:
                 running_test_loss=test_loss
