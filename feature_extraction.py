@@ -6,7 +6,7 @@ from collections import namedtuple
 # Data science
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import Normalizer
+from sklearn.preprocessing import MinMaxScaler
 
 # NLP
 from textblob_de import TextBlobDE as TBD
@@ -17,7 +17,7 @@ from laserembeddings import Laser
 
 
 def spacy_parser(x, y, mode="pos_"):
-    # Models don't have the same entities
+    """Parse POS tags and entities to retrieve features."""
     whitelist = ["PER", "PERSON", "LOC", "ORG"]
     if mode in ["ents"]:
         mode = "label_"
@@ -97,6 +97,7 @@ class FeatureExtractor:
         return df
 
     def laser_embeddings(self):
+        """Extract laser embeddings and reshape appropriately."""
         src = self.laser.embed_sentences(
             self.df["src"].tolist(), lang="en"
         )  # (N, 1024)
@@ -106,36 +107,48 @@ class FeatureExtractor:
         res = np.zeros((src.shape[0], 2, 1024))  # (N, 2, 1024) ndarray
         res[:, 0, :] = src
         res[:, 1, :] = tgt
+
+        # Standardize scores
+        res = MinMaxScaler().fit_transform(res)
+
         return res
 
     def features(self):
+        """Extract baseline features"""
         sp_en = spacy.load("en")
         sp_de = spacy.load("de")
         en_checker = language_check.LanguageTool("en-GB")
         ge_checker = language_check.LanguageTool("de-DE")
 
         ft = self.df.copy()
+        # Sentences without punctuation
         ft[["src_p", "tgt_p"]] = ft[["src", "tgt"]].applymap(
             lambda x: x.lower().translate(str.maketrans("", "", string.punctuation))
         )
+        # Number of tokens
         ft["src_len"] = ft["src_p"].apply(lambda x: len(x.split(" ")))
         ft["tgt_len"] = ft["tgt_p"].apply(lambda x: len(x.split(" ")))
         count = lambda l1, l2: sum([1 for x in l1 if x in l2])
+        # Number of non alphanumeric characters
         ft["src_#punc"] = ft["src"].apply(lambda x: count(x, set(string.punctuation)))
         ft["tgt_#punc"] = ft["tgt"].apply(lambda x: count(x, set(string.punctuation)))
+        # Sentiment analysis
         ft["tgt_polar"] = ft["tgt"].apply(lambda x: TBD(x).sentiment.polarity)
         ft["src_polar"] = ft["src"].apply(lambda x: TBE(x).sentiment.polarity)
         ft["polar_ftf"] = (ft["tgt_polar"] - ft["src_polar"]).abs()
+        # Spacy encoding
         ft["src_sp"] = ft["src"].apply(lambda x: sp_en(x))
         ft["tgt_sp"] = ft["tgt"].apply(lambda x: sp_de(x))
-        ft["src_gram_err"] = ft["src"].apply(lambda x: len(en_checker.check(x)))
-        ft["tgt_gram_err"] = ft["tgt"].apply(lambda x: len(ge_checker.check(x)))
+        # Proofread errors
         ft["sp_pos_diff"] = [
             spacy_parser(x, y, "pos_") for x, y in zip(ft["src_sp"], ft["tgt_sp"])
         ]
         ft["sp_ent_diff"] = [
             spacy_parser(x, y, "ents") for x, y in zip(ft["src_sp"], ft["tgt_sp"])
         ]
+        ft["src_gram_err"] = ft["src"].apply(lambda x: len(en_checker.check(x)))
+        ft["tgt_gram_err"] = ft["tgt"].apply(lambda x: len(ge_checker.check(x)))
+        # Features of interest
         foi = [
             "src_len",
             "tgt_len",
@@ -150,11 +163,12 @@ class FeatureExtractor:
         ]  # Features of interest
 
         features = ft[foi].values
-        normalized_features = Normalizer().fit_transform(features)
+        normalized_features = MinMaxScaler().fit_transform(features)
 
-        return normalized_features
+        return features
 
     def run(self):
+        """Run feature extraction pipeline."""
         print("Loading data")
         self.load_data()
         print("Extracting Laser Embeddings")

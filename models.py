@@ -37,16 +37,16 @@ class RecursiveNN_Linear(nn.Module):
 
     def forward(self, laser_inputs, other_features):
         out = self.linear1a(laser_inputs)
-        out = F.relu(out)
+        out = F.leaky_relu(out, 0.8)
         out = self.linear2a(out)
-        out = F.relu(out)
+        out = F.leaky_relu(out, 0.8)
         out = self.linear3a(out)
 
         out = torch.cat((out, other_features), dim=1)
         out = self.linear1b(out)
-        out = F.relu(out)
+        out = F.leaky_relu(out, 0.8)
         out = self.linear2b(out)
-        out = F.relu(out)
+        out = F.leaky_relu(out, 0.8)
         out = self.linear3b(out)
 
         return out.view(-1)
