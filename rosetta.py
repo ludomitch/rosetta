@@ -12,11 +12,11 @@ from joblib import dump, load
 import matplotlib.pyplot as plt
 
 # NLP
-from textblob_de import TextBlobDE as TBD
-from textblob import TextBlob as TBE
-import spacy
-import language_check
-from laserembeddings import Laser
+# from textblob_de import TextBlobDE as TBD
+# from textblob import TextBlob as TBE
+# import spacy
+# import language_check
+# from laserembeddings import Laser
 
 # ML
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
@@ -148,11 +148,17 @@ class FeatureExtractor:
 def train_model(model, train_loader, optimizer, epoch, log_interval=100, scheduler=None, writer=None):
     tloss = 0
 
+    """SMOOTH L1 LOSS: Creates a criterion that uses a squared term if the absolute
+    element-wise error falls below 1 and an L1 term otherwise.
+    It is less sensitive to outliers than the `MSELoss` and in some cases
+    prevents exploding gradients """
+
     for batch_idx, (lsr, feats, targets) in enumerate(train_loader):
         optimizer.zero_grad()
         outputs = model(lsr, feats)
 
-        loss = F.mse_loss(outputs, targets.view(-1))
+        loss = F.smooth_l1_loss(outputs, targets.view(-1))
+        # loss = F.mse_loss(outputs, targets.view(-1))
         tloss +=loss.item()
 
         loss.backward()
@@ -174,8 +180,8 @@ def train_model(model, train_loader, optimizer, epoch, log_interval=100, schedul
         writer.add_scalar('Train/Loss', tloss, epoch)
     if scheduler is not None:
         scheduler.step()
-            
-            
+
+
 def test_model(model, test_loader, epoch, writer = None, scaler=None, upsample=False, score=True):
 
     test_loss = 0.0
@@ -186,7 +192,7 @@ def test_model(model, test_loader, epoch, writer = None, scaler=None, upsample=F
             if upsample:
                 targets = torch.tensor(scaler.transform(targets.reshape(-1,1)).ravel())
                 targets = targets.float()
-            test_loss += F.mse_loss(outputs, targets).item()
+            test_loss += F.smooth_l1_loss(outputs, targets).item()
 
             # pred = outputs.argmax(dim=1, keepdim=True)
 
@@ -216,50 +222,47 @@ class Rosetta:
             print('Please specify F or T next time, setting false .......')
             self.bSave = False
 
-        self.latent_space_laser = 24
+        self.latent_space_laser = 16
         self.bUseConv = bUseConv
 
         if self.bUseConv:
             self.params = {
-                "step_size" : 2,
-                "gamma" : 0.9,
-                "normalising" : False,
-                "batch_size_train" : 512,
-                "batch_size_test":256,
-                "lr" :2e-04,
-                "epochs":50,
+                "step_size" : 5,
+                "gamma" : 0.8,
+                "batch_size_train" : 64,
+                "batch_size_test": 128,
+                "lr" :4e-04,
+                "epochs":40,
                 "NBaseline":10,
-                'upsampling_factor':7000,
-                'upsample': True,
+                'upsampling_factor':3000,
+                'upsample': False,
 
                 "conv_dict":{
-                'InChannels': [2, 8],
-                'OutChannels': [8, 1],
-                'Ksze': [2, 2],
-                'Stride': [2, 2],
-                'Padding': [1, 1],
+                'InChannels': [2],
+                'OutChannels': [2],
+                'Ksze': [1],
+                'Stride': [1],
+                'Padding': [0],
                 'MaxPoolDim':1,
-                'MaxPoolBool':True},
+                'MaxPoolBool':False},
 
                 "conv_ffnn_dict":{
-                    'laser_hidden_layers':[24, self.latent_space_laser],
-                    'mixture_hidden_layers':[12, 1]}
+                    'laser_hidden_layers':[64, self.latent_space_laser],
+                    'mixture_hidden_layers':[32, 32, 1]}
                 }
         else:
             self.params = {
-                "N1" : 32,
+                "N1" : 64,
                 "N2" : 32,
-                "lr" : 5e-5,
-                "step_size" : 60,
-                "gamma" : 0.5,
-                "batch_size_train" : 300,
-                "batch_size_test": 100,
-                "normalising" : False,
-                "epochs": 200,
-                'upsampling_factor':3000,
+                "lr" : 2e-4,
+                "step_size" : 5,
+                "gamma" : 0.8,
+                "batch_size_train" : 32,
+                "batch_size_test": 128,
+                "epochs": 30,
+                'upsampling_factor':5000,
                 'upsample': False
             }
-
 
     def preprocess(self, scores, lsr, nlp):
 
@@ -269,7 +272,7 @@ class Rosetta:
                 lsr = lsr.reshape(-1, 2048)
             scores = scores.reshape(-1,1)
 
-            idxs = np.nonzero((scores.ravel()<1.6)&(scores.ravel()>-2.5)) # Get indices to keep
+            idxs = np.nonzero((scores.ravel()<1.6)&(scores.ravel()>-3.5)) # Get indices to keep
             filtered_lsr = lsr[idxs]
             filtered_nlp = nlp[idxs]
             filtered_scores = scores[idxs]
@@ -280,7 +283,7 @@ class Rosetta:
 
             n, bins, patches = plt.hist(scaled_scores, 15, density=True, range=(-1, 1), facecolor='g', alpha=0.75)
 
-            prob_dist = np.ones(len(n))-n*0.45
+            prob_dist = np.ones(len(n))-n*0.35
             prob_dist = prob_dist**15/sum(prob_dist)
 
             dump(self.scaler, 'scaler.joblib')
@@ -314,12 +317,17 @@ class Rosetta:
         else:
             final_lsr = lsr
             final_nlp = nlp
-            final_scores = scores            
+            final_scores = scores
         res = namedtuple("res", ['lsr', 'feats', 'scores'])(
                     lsr=final_lsr, feats=final_nlp, scores=final_scores)
 
         return res
 
+    def normalise(self, dataset):
+        return (dataset - self.min_train)/(self.max_train-self.min_train)
+
+    def de_normalise(self, dataset):
+        return dataset*(self.max_train-self.min_train) + self.min_train
 
     def run(self):
         if self.mode == 'extract':
@@ -344,6 +352,12 @@ class Rosetta:
             devlsr = np.load("saved_features/dev_lsr.npy",  allow_pickle=True)
             devnlp = np.load("saved_features/dev_nlp.npy", allow_pickle=True)
             devsc = np.load("saved_features/dev_scores.npy", allow_pickle=True)
+
+            self.min_train = np.min(trainlsr,axis = 0)
+            self.max_train = np.max(trainlsr,axis = 0)
+
+            trainlsr = self.normalise(trainlsr)
+            devlsr = self.normalise(devlsr)
 
             if not self.bUseConv:
                 trainlsr = trainlsr.reshape(-1, 2048)
@@ -382,7 +396,7 @@ class Rosetta:
         if self.bUseConv:
             model = RecursiveNN(ModelBlock, params["conv_dict"], params["conv_ffnn_dict"], BASELINE_dim=params["NBaseline"])
         else:
-            model = RecursiveNN_Linear(in_features=2048, N1=params["N1"], N2=params["N2"], out_features=5) # 2048
+            model = RecursiveNN_Linear(in_features=2048, N1=params["N1"], N2=params["N2"], out_features=16) # 2048
 
         model = model.to(device)
 
@@ -402,9 +416,11 @@ class Rosetta:
         running_test_loss = 1000
         print('Running model')
         for epoch in range(params['epochs']):
+            model.train()
             train_model(model, train_loader, optimizer, epoch, log_interval=1000,scheduler=scheduler, writer = writer)
+            model.eval()
             test_loss = test_model(model, dev_loader, epoch, writer = writer, scaler=self.scaler, upsample=self.params['upsample'], score=False)
-            if (test_loss-running_test_loss)>0.01:
+            if (test_loss-running_test_loss)>0.05:
                 break
             else:
                 running_test_loss=test_loss
