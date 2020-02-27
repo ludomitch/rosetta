@@ -38,7 +38,9 @@ Options:
 ## Available Scripts
 From the root directory, you can run:
 
-`python3 -m rosetta` to run the rosetta training pipeline.
+`python3 -m rosetta <mode> <save>` to run the rosetta training pipeline.
+`<mode>` accepts the values 'no-extract' or 'extract' and decides respectively whether to load pre-generated features saved in the `/saved_features` directory or whether to extract the features from scratch.
+`<save>` accepts 'T' of 'F'. T for if you want to save the model as model.pt and F if you do not want to save the model generated.
 
 
 
