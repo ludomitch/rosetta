@@ -14,6 +14,7 @@ import torch.nn.functional as F
 import torch.utils.data as data_utils
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
+import datetime
 
 # In house
 from models import RecursiveNN, RecursiveNN_Linear, ModelBlock, weights_init
@@ -53,6 +54,7 @@ def train_model(
     # )
 
     # Write loss to tensorboard
+
     if writer != None:
         writer.add_scalar("Train/Loss", tloss, epoch)
     if scheduler is not None:
@@ -89,6 +91,13 @@ class Rosetta:
 
     def __init__(self, mode="extract", bSave="T", bUseConv=False):
         self.mode = mode
+        if bSave is 'T':
+            print('GONE SAVE')
+            self.bSave = False
+        else:
+            print('AINT GONE SAVE')
+            print('Please specify F or T next time, setting false .......')
+            self.bSave = False
 
         if bSave is "T":
             self.bSave = False
@@ -261,6 +270,7 @@ class Rosetta:
             split = False if self.full_data else True
             train, dev = load_features(split=split, nt=True)
 
+
         if self.params["upsample"]:
             train = self.upsample(train)
 
@@ -344,3 +354,4 @@ if __name__ == "__main__":
     args = parser.parse_args().__dict__
 
     Rosetta(args["mode"][0], args["save"][0]).run()
+
