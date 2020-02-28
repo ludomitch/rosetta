@@ -94,11 +94,11 @@ class Rosetta:
         else:
             self.bSave = False
 
-        self.latent_space_laser = 16
         self.bUseConv = bUseConv
 
         # Saved model
         self.model = None
+        self.full_data = True
 
         # Define all hyperparameters
         if self.bUseConv:
@@ -122,26 +122,25 @@ class Rosetta:
                     "MaxPoolBool": False,
                 },
                 "conv_ffnn_dict": {
-                    "laser_hidden_layers": [64, self.latent_space_laser],
+                    "laser_hidden_layers": [64, 16],
                     "mixture_hidden_layers": [32, 32, 1],
                 },
             }
         else:
-            self.params = {
-                "N1": 35,
-                "N2": 54,
-                "lr": 0.0004,
-                "step_size": 25,
-                "gamma": 0.17,
-                "batch_size_train": 394,
-                "batch_size_test": 128,
-                "out_features": 13,
-                "epochs": 69,
-                "upsampling_factor": 5000,
-                "upsample": False,
-                "dropout": False,
-                "leaky_relu": False,
-            }
+            self.params = {'N1': 40, 'N2': 12, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 29, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False}
+
+
+ # {'N1': 16,
+ # 'N2': 32,
+ # 'batch_size_test': 100,
+ # 'batch_size_train': 300,
+ # 'dropout': 0,
+ # 'epochs': 30,
+ # 'leaky_relu': False,
+ # 'lr': 0.0005,
+ # 'out_features': 15,
+ # 'upsample': False,
+ # 'upsampling_factor': 5000}
 
     # {'N1': 45, 'N2': 8, 'lr': 0.0004, 'step_size': 8, 'gamma': 0.27309101137730163, 'batch_size_train': 221, 'epochs': 16, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
     # {'N1': 35, 'N2': 54, 'lr': 0.0004, 'step_size': 25, 'gamma': 0.17070707330410118, 'batch_size_train': 394, 'epochs': 69, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
@@ -248,11 +247,11 @@ class Rosetta:
             devnlp = np.load("saved_features/dev_nlp.npy", allow_pickle=True)
             devsc = np.load("saved_features/dev_scores.npy", allow_pickle=True)
 
-            self.min_train = np.min(trainlsr, axis=0)
-            self.max_train = np.max(trainlsr, axis=0)
+            # self.min_train = np.min(trainlsr, axis=0)
+            # self.max_train = np.max(trainlsr, axis=0)
 
-            trainlsr = self.normalise(trainlsr)
-            devlsr = self.normalise(devlsr)
+            # trainlsr = self.normalise(trainlsr)
+            # devlsr = self.normalise(devlsr)
 
             if not self.bUseConv:
                 trainlsr = trainlsr.reshape(-1, 2048)
@@ -263,17 +262,36 @@ class Rosetta:
         )
 
         # Upsample training set if necessary
-        train = self.upsample(trainsc, trainlsr, trainnlp)
+        if self.full_data:
+            all_train_lsr = np.append(trainlsr, devlsr, axis=0)
+            all_train_nlp = np.append(trainnlp, devnlp, axis=0)
+            all_train_sc = np.append(trainsc, devsc, axis=0)
+            res = namedtuple("res", ["lsr", "feats", "scores"])(
+                lsr=all_train_lsr, feats=all_train_nlp, scores=all_train_sc
+            )
+            train_ = data_utils.TensorDataset(
+                *[
+                    torch.tensor(getattr(res, i)).float()
+                    for i in ["lsr", "feats", "scores"]
+                ]
+            )
+            train_loader = data_utils.DataLoader(
+                train_, batch_size=self.params["batch_size_train"], shuffle=True
+            )
 
-        train_ = data_utils.TensorDataset(
-            *[
-                torch.tensor(getattr(train, i)).float()
-                for i in ["lsr", "feats", "scores"]
-            ]
-        )
-        train_loader = data_utils.DataLoader(
-            train_, batch_size=self.params["batch_size_train"], shuffle=True
-        )
+
+        else:
+            train = self.upsample(trainsc, trainlsr, trainnlp)
+
+            train_ = data_utils.TensorDataset(
+                *[
+                    torch.tensor(getattr(train, i)).float()
+                    for i in ["lsr", "feats", "scores"]
+                ]
+            )
+            train_loader = data_utils.DataLoader(
+                train_, batch_size=self.params["batch_size_train"], shuffle=True
+            )
 
         dev_ = data_utils.TensorDataset(
             *[torch.tensor(getattr(dev, i)).float() for i in ["lsr", "feats", "scores"]]
@@ -314,6 +332,8 @@ class Rosetta:
                 N1=self.params["N1"],
                 N2=self.params["N2"],
                 out_features=self.params["out_features"],
+                dropout=self.params['dropout'],
+                leaky_relu=self.params['leaky_relu']
             )  # 2048
 
         model = model.to(device)

@@ -11,6 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from models import RecursiveNN_Linear
 from rosetta import Rosetta, train_model, test_model
+from utils import create_loader
 
 logdir = "./logs/"
 
@@ -40,7 +41,7 @@ def load_data():
     return train_
 
 
-def create_loader(data, individual, validate=False):
+def create_loader(data, batch_size, validate=False):
     """Create a dataloader."""
 
     if validate:
@@ -78,18 +79,12 @@ def population_generator(pop, pop_size):
     #             "dropout": np.random.random_sample() * 0.7,
     #         }
     #     )
-    pop = [{'N1': 18, 'N2': 53, 'lr': 0.0009000000000000001, 'step_size': 16, 'gamma': 0.9567112447233481, 'batch_size_train': 176, 'epochs': 52, 'out_features': 14, 'leaky_relu': False, 'dropout': False},
-{'N1': 36, 'N2': 9, 'lr': 0.00030000000000000003, 'gamma': 0.3447454391800292, 'batch_size_train': 60, 'epochs': 17, 'out_features': 12, 'leaky_relu': False, 'dropout': 0.10932128600853393},
-{'N1': 22, 'N2': 38, 'lr': 0.0002, 'gamma': 0.26551970832431127, 'batch_size_train': 215, 'epochs': 70, 'out_features': 3, 'leaky_relu': False, 'dropout': 0.16290902685175007, 'score': 0.061367278685044886},
-{'N1': 36, 'N2': 9, 'lr': 0.00030000000000000003, 'gamma': 0.3447454391800292, 'batch_size_train': 60, 'epochs': 17, 'out_features': 12, 'leaky_relu': False, 'dropout': 0.10932128600853393},
-{'N1': 51, 'N2': 53, 'lr': 0.0002, 'gamma': 0.26551970832431127, 'batch_size_train': 215, 'epochs': 70, 'out_features': 3, 'leaky_relu': False, 'dropout': 0.16290902685175007},
-{'N1': 40, 'N2': 59, 'lr': 0.00030000000000000003, 'gamma': 0.8951150444189663, 'batch_size_train': 175, 'epochs': 48, 'out_features': 13, 'leaky_relu': 0, 'dropout': 0.3378680021197293},
-{'N1': 51, 'N2': 53, 'lr': 0.0002, 'gamma': 0.26551970832431127, 'batch_size_train': 215, 'epochs': 70, 'out_features': 3, 'leaky_relu': False, 'dropout': 0.16290902685175007},
-{'N1': 22, 'N2': 38, 'lr': 0.0004, 'gamma': 0.8507229405017469, 'batch_size_train': 279, 'epochs': 71, 'out_features': 13, 'leaky_relu': False, 'dropout': 0.12805402705224658},
-{'N1': 33, 'N2': 53, 'lr': 0.00030000000000000003, 'gamma': 0.5515892356258006, 'batch_size_train': 215, 'epochs': 70, 'out_features': 3, 'leaky_relu': False, 'dropout': 0.16290902685175007},
-{'N1': 51, 'N2': 53, 'lr': 0.0002, 'gamma': 0.26551970832431127, 'batch_size_train': 166, 'epochs': 42, 'out_features': 1, 'leaky_relu': True, 'dropout': 0.21402957775830403, 'score': 0.07920200393107506},
-{'N1': 36, 'N2': 9, 'lr': 0.00030000000000000003, 'gamma': 0.3447454391800292, 'batch_size_train': 60, 'epochs': 17, 'out_features': 12, 'leaky_relu': False, 'dropout': 0.10932128600853393},
-{'N1': 22, 'N2': 38, 'lr': 0.0004, 'gamma': 0.8507229405017469, 'batch_size_train': 279, 'epochs': 71, 'out_features': 13, 'leaky_relu': False, 'dropout': 0.12805402705224658}]
+    pop = [{'N1': 40, 'N2': 12, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 35, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False},
+{'N1': 24, 'N2': 12, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 25, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False, 'score': 0.08514838280631369},
+{'N1': 40, 'N2': 12, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 29, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.2, 'leaky_relu': False},
+{'N1': 48, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 13, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True},
+{'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 29, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False, 'score': 0.10681842918412339},
+{'N1': 40, 'N2': 20, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 27, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': True}]
 
     return pop
 
@@ -112,7 +107,7 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
                     "N1",
                     "N2",
                     "lr",
-                    "gamma",
+                    # "gamma",
                     "batch_size_train",
                     "epochs",
                     "leaky_relu",
@@ -120,7 +115,7 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
                     "dropout",
                     None,
                 ],
-                p=[(mutation_rate) / 9 for i in range(0, 9)] + [1 - mutation_rate],
+                p=[(mutation_rate) / 8 for i in range(0, 8)] + [1 - mutation_rate],
             )
             if mutate_param != None:
                 # print("Mutating {}:{}".format(mutate_param, individual[mutate_param]))
@@ -139,6 +134,8 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
                         individual[mutate_param] = False
                     else:
                         individual[mutate_param] = True
+                    if mutate_param=='dropout':
+                        individual[mutate_param] = min(individual[mutate_param],0.9)
 
                 else:
                     mutated = np.random.choice(
@@ -157,7 +154,7 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
             "N1",
             "N2",
             "lr",
-            "gamma",
+            # "gamma",
             "batch_size_train",
             "epochs",
             "leaky_relu",
@@ -206,8 +203,8 @@ def init_params(train, validate, individual):
     )  # Create model with hyperparmeters "N1" and "N2"
 
     # Create clean loaders here
-    loader_train = create_loader(train, individual)
-    loader_val = create_loader(validate, individual, validate=True)
+    loader_train = create_loader(train, individual['batch_size_train'])
+    loader_val = create_loader(validate, validate=True)
 
     return model, loader_train, loader_val
 
@@ -259,6 +256,7 @@ def cross_val(individual):
 
         # Train model
         for epoch in range(individual["epochs"]):
+            model.train()
             train_model(
                 model,
                 train_loader,
@@ -269,11 +267,12 @@ def cross_val(individual):
             )
 
         # test model on val set
-        score = test_model(model, val_loader, epoch=0, writer=None, score=True)[1]
+        model.eval()
+        score = test_model(model, val_loader, epoch=0, writer=writer, score=True)[1]
         cross_val_scores.append(score)
 
     individual_score = np.sum(cross_val_scores)/folds
-    if any(i>0.08 for i in cross_val_scores):
+    if any(i>0.1 for i in cross_val_scores):
         print(f"Crossval scores: {cross_val_scores}")
         print("Average Score ", individual_score)
     return individual_score
@@ -282,11 +281,10 @@ def cross_val(individual):
 def run():
     """Run the whole evolutionary algorithm pipeline for a given number of iterations."""
     iterations = 15
-    population_size = 10
-    lamda = 0.1
-    mutation_rate = 0.1
-    crossover_rate = 0.5
-
+    population_size = 6
+    lamda = 0.5
+    mutation_rate = 0.2
+    crossover_rate = 0.4
     population = population_generator([], population_size)
     pop_scores = {k: [] for k in range(0, iterations)}
     for iteration in range(0, iterations):

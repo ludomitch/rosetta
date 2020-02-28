@@ -110,7 +110,7 @@ class FeatureExtractor:
         res[:, 1, :] = tgt
 
         # Standardize scores
-        res = MinMaxScaler().fit_transform(res)
+        # res = MinMaxScaler().fit_transform(res)
 
         return res
 
@@ -164,7 +164,7 @@ class FeatureExtractor:
         ]  # Features of interest
 
         features = ft[foi].values
-        normalized_features = MinMaxScaler().fit_transform(features)
+        # normalized_features = MinMaxScaler().fit_transform(features)
 
         return features
 
