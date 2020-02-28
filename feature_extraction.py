@@ -80,8 +80,7 @@ class FeatureExtractor:
 
         df = src.rename(columns={0: "src"})
 
-
-        if self.mode!= 'test':
+        if self.mode != "test":
             scores = pd.read_csv(
                 f"{path}.scores",
                 sep="\n",
@@ -91,7 +90,9 @@ class FeatureExtractor:
             )
             df["scores"] = scores
         else:
-            df['scores'] = [0 for _ in range(len(target))] # just placeholder, not used for test
+            df["scores"] = [
+                0 for _ in range(len(target))
+            ]  # just placeholder, not used for test
         df["tgt"] = target
         setattr(self, "df", df)
         return df

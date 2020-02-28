@@ -2,16 +2,19 @@
 import argparse
 from collections import namedtuple
 import datetime
+
 # ML
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
 # DL
 import torch
 import torch.nn.functional as F
 import torch.utils.data as data_utils
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
+
 # In house
 from models import RecursiveNN, RecursiveNN_Linear, ModelBlock, weights_init
 from feature_extraction import FeatureExtractor
@@ -36,7 +39,7 @@ def train_model(
 
         # loss = F.smooth_l1_loss(outputs, targets.view(-1))
         loss = F.mse_loss(outputs, targets.view(-1))
-        tloss +=loss.item()
+        tloss += loss.item()
 
         loss.backward()
 
@@ -55,9 +58,7 @@ def train_model(
         scheduler.step()
 
 
-def test_model(
-    model, test_loader, epoch, writer=None, score=False
-):
+def test_model(model, test_loader, epoch, writer=None, score=False):
     """Output test loss and/or score for one epoch."""
 
     test_loss = 0.0
@@ -72,7 +73,7 @@ def test_model(
     # Write loss to tensorboard
     if writer != None:
         writer.add_scalar("Test/Loss", test_loss, epoch)
-    if score: # For evolutionary algorithms
+    if score:  # For evolutionary algorithms
         df = pd.DataFrame({"real": targets.view(-1), "preds": outputs}).fillna(0)
         df = df.corr().fillna(0)
         score = abs(df["preds"]["real"])
@@ -100,56 +101,56 @@ class Rosetta:
         # Saved model
         self.model = None
 
-
         # Define all hyperparameters
         if self.bUseConv:
             self.params = {
-                "step_size" : 5,
-                "gamma" : 0.8,
-                "batch_size_train" : 64,
+                "step_size": 5,
+                "gamma": 0.8,
+                "batch_size_train": 64,
                 "batch_size_test": 128,
-                "lr" :4e-04,
-                "epochs":40,
-                "NBaseline":10,
-                'upsampling_factor':3000,
-                'upsample': False,
-
-                "conv_dict":{
-                'InChannels': [2],
-                'OutChannels': [2],
-                'Ksze': [1],
-                'Stride': [1],
-                'Padding': [0],
-                'MaxPoolDim':1,
-                'MaxPoolBool':False},
-
-                "conv_ffnn_dict":{
-                    'laser_hidden_layers':[64, self.latent_space_laser],
-                    'mixture_hidden_layers':[32, 32, 1]}
-                }
+                "lr": 4e-04,
+                "epochs": 40,
+                "NBaseline": 10,
+                "upsampling_factor": 3000,
+                "upsample": False,
+                "conv_dict": {
+                    "InChannels": [2],
+                    "OutChannels": [2],
+                    "Ksze": [1],
+                    "Stride": [1],
+                    "Padding": [0],
+                    "MaxPoolDim": 1,
+                    "MaxPoolBool": False,
+                },
+                "conv_ffnn_dict": {
+                    "laser_hidden_layers": [64, self.latent_space_laser],
+                    "mixture_hidden_layers": [32, 32, 1],
+                },
+            }
         else:
             self.params = {
-                "N1" : 35,
-                "N2" : 54,
-                "lr" : 0.0004,
-                "step_size" : 25,
-                "gamma" : 0.17,
-                "batch_size_train" : 394,
+                "N1": 35,
+                "N2": 54,
+                "lr": 0.0004,
+                "step_size": 25,
+                "gamma": 0.17,
+                "batch_size_train": 394,
                 "batch_size_test": 128,
-                'out_features': 13,
+                "out_features": 13,
                 "epochs": 69,
-                'upsampling_factor':5000,
-                'upsample': False,
-                'dropout': False,
-                'leaky_relu': False
+                "upsampling_factor": 5000,
+                "upsample": False,
+                "dropout": False,
+                "leaky_relu": False,
             }
-# {'N1': 45, 'N2': 8, 'lr': 0.0004, 'step_size': 8, 'gamma': 0.27309101137730163, 'batch_size_train': 221, 'epochs': 16, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
-# {'N1': 35, 'N2': 54, 'lr': 0.0004, 'step_size': 25, 'gamma': 0.17070707330410118, 'batch_size_train': 394, 'epochs': 69, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
+
+    # {'N1': 45, 'N2': 8, 'lr': 0.0004, 'step_size': 8, 'gamma': 0.27309101137730163, 'batch_size_train': 221, 'epochs': 16, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
+    # {'N1': 35, 'N2': 54, 'lr': 0.0004, 'step_size': 25, 'gamma': 0.17070707330410118, 'batch_size_train': 394, 'epochs': 69, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
 
     def upsample(self, scores, lsr, nlp):
 
-        if self.params['upsample']:
-             # Define parameters
+        if self.params["upsample"]:
+            # Define parameters
             alpha = 0.45
             beta = 15
             gamma = 0.05
@@ -159,12 +160,7 @@ class Rosetta:
 
             # Retrieve score distribution in 15 bins
             n, bins, _ = plt.hist(
-                scores,
-                15,
-                density=True,
-                range=(-1, 1),
-                facecolor="g",
-                alpha=0.75,
+                scores, 15, density=True, range=(-1, 1), facecolor="g", alpha=0.75
             )
 
             # Create upsampling distribution
@@ -187,7 +183,7 @@ class Rosetta:
                 size=self.params["upsampling_factor"],
             )
 
-            # Create upsampling data subset with random noise 
+            # Create upsampling data subset with random noise
             augmented_lsr = np.zeros((len(idxs), lsr.shape[1]))
             augemented_nlp = np.zeros((len(idxs), nlp.shape[1]))
             augmented_scores = np.zeros((len(idxs), scores.shape[1]))
@@ -224,10 +220,10 @@ class Rosetta:
         return res
 
     def normalise(self, dataset):
-        return (dataset - self.min_train)/(self.max_train-self.min_train)
+        return (dataset - self.min_train) / (self.max_train - self.min_train)
 
     def de_normalise(self, dataset):
-        return dataset*(self.max_train-self.min_train) + self.min_train
+        return dataset * (self.max_train - self.min_train) + self.min_train
 
     def run(self):
         """Run whole data loading, feature extraction, model training and regressing pipeline."""
@@ -253,8 +249,8 @@ class Rosetta:
             devnlp = np.load("saved_features/dev_nlp.npy", allow_pickle=True)
             devsc = np.load("saved_features/dev_scores.npy", allow_pickle=True)
 
-            self.min_train = np.min(trainlsr,axis = 0)
-            self.max_train = np.max(trainlsr,axis = 0)
+            self.min_train = np.min(trainlsr, axis=0)
+            self.max_train = np.max(trainlsr, axis=0)
 
             trainlsr = self.normalise(trainlsr)
             devlsr = self.normalise(devlsr)
@@ -315,7 +311,10 @@ class Rosetta:
             )
         else:
             model = RecursiveNN_Linear(
-                in_features=2048, N1=self.params["N1"], N2=self.params["N2"], out_features=self.params['out_features']
+                in_features=2048,
+                N1=self.params["N1"],
+                N2=self.params["N2"],
+                out_features=self.params["out_features"],
             )  # 2048
 
         model = model.to(device)
@@ -349,12 +348,7 @@ class Rosetta:
                 scheduler=scheduler,
                 writer=writer,
             )
-            test_loss = test_model(
-                model,
-                dev_loader,
-                epoch,
-                writer=writer,
-            )
+            test_loss = test_model(model, dev_loader, epoch, writer=writer)
 
         torch.save(model, "model.pt")
         self.model = model

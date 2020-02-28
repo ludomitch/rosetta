@@ -39,6 +39,7 @@ def load_data():
     )
     return train_
 
+
 def create_loader(data, individual, validate=False):
     """Create a dataloader."""
 
@@ -53,10 +54,9 @@ def create_loader(data, individual, validate=False):
             torch.Tensor(data[:, 2058:]),
         ]
     )
-    loader = data_utils.DataLoader(
-        dataset, batch_size=batch_size, shuffle=True
-    )
+    loader = data_utils.DataLoader(dataset, batch_size=batch_size, shuffle=True)
     return loader
+
 
 dataset = load_data()
 
@@ -69,14 +69,13 @@ def population_generator(pop, pop_size):
             {
                 "N1": np.random.randint(low=4, high=64),
                 "N2": np.random.randint(low=4, high=64),
-                "lr": np.random.randint(low=1, high=10)*1e-4,
-                "step_size": np.random.randint(low=0, high=epochs),
+                "lr": np.random.randint(low=1, high=10) * 1e-4,
                 "gamma": np.random.random_sample(),
                 "batch_size_train": np.random.randint(low=32, high=512),
                 "epochs": epochs,
                 "out_features": np.random.randint(low=1, high=15),
                 "leaky_relu": bool(random.getrandbits(1)),
-                "dropout": np.random.random_sample()*0.7
+                "dropout": np.random.random_sample() * 0.7,
             }
         )
     return pop
@@ -100,7 +99,6 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
                     "N1",
                     "N2",
                     "lr",
-                    "step_size",
                     "gamma",
                     "batch_size_train",
                     "epochs",
@@ -109,7 +107,7 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
                     "dropout",
                     None,
                 ],
-                p=[(mutation_rate) / 10 for i in range(1,10)] + [1 - mutation_rate],
+                p=[(mutation_rate) / 10 for i in range(1, 10)] + [1 - mutation_rate],
             )
             if mutate_param != None:
                 print("Mutating {}:{}".format(mutate_param, individual[mutate_param]))
@@ -143,16 +141,15 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
     if crossover_rate != None:
         nb = int((crossover_rate / 2) * len(pop))
         params = [
-                    "N1",
-                    "N2",
-                    "lr",
-                    "step_size",
-                    "gamma",
-                    "batch_size_train",
-                    "epochs",
-                    "leaky_relu",
-                    "out_features",
-                    "dropout",
+            "N1",
+            "N2",
+            "lr",
+            "gamma",
+            "batch_size_train",
+            "epochs",
+            "leaky_relu",
+            "out_features",
+            "dropout",
         ]
         cross1 = [new_pop.pop(random.randrange(len(new_pop))) for _ in range(nb)]
         cross2 = [new_pop.pop(random.randrange(len(new_pop))) for _ in range(nb)]
@@ -182,6 +179,7 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
 
     return new_pop
 
+
 def init_params(train, validate, individual):
     """Initialise model parameters"""
 
@@ -190,8 +188,8 @@ def init_params(train, validate, individual):
         N1=individual["N1"],
         N2=individual["N2"],
         out_features=individual["out_features"],
-        leaky_relu=individual['leaky_relu'],
-        dropout=individual['dropout']
+        leaky_relu=individual["leaky_relu"],
+        dropout=individual["dropout"],
     )  # Create model with hyperparmeters "N1" and "N2"
 
     # Create clean loaders here
@@ -199,6 +197,7 @@ def init_params(train, validate, individual):
     loader_val = create_loader(validate, individual, validate=True)
 
     return model, loader_train, loader_val
+
 
 def split(arr, pos, n):
     """takes an array, splits it in 2 uneven arrays.
@@ -215,9 +214,9 @@ def split(arr, pos, n):
 
 def cross_val(individual):
     """Conduct k fold cross validation for a single individual to find fitness."""
-    
+
     # copy data to avoid damaging the dataset
-    split_size = int(dataset.shape[0]/folds)
+    split_size = int(dataset.shape[0] / folds)
     # Shuffle data
     np.random.shuffle(dataset)
 
@@ -226,7 +225,9 @@ def cross_val(individual):
 
     # Splitting validation from training
     for i in range(folds):
-        print(f"-------------------- Validate/Train separation {i} --------------------")
+        print(
+            f"-------------------- Validate/Train separation {i} --------------------"
+        )
 
         # Split data into validation and training set
         validate, train = split(dataset, i * split_size, split_size)
@@ -238,17 +239,12 @@ def cross_val(individual):
         optimizer = torch.optim.Adam(
             model.parameters(), lr=individual["lr"], betas=(0.9, 0.999)
         )  # add beta to genotype?
-        # Initialise scheduler
-        #             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size = individual["step_size"], gamma = individual["gamma"])
 
         # Create Tensorboard logs
         date_string = (
             str(datetime.datetime.now())[:16].replace(":", "-").replace(" ", "-")
         )
         writer = SummaryWriter(logdir + date_string)
-
-
-        scheduler = None
 
         # Train model
         for epoch in range(individual["epochs"]):
@@ -263,13 +259,7 @@ def cross_val(individual):
             )
 
         # test model on val set
-        score += test_model(
-            model,
-            val_loader,
-            epoch=0,
-            writer=None,
-            score=True,
-        )[1]
+        score += test_model(model, val_loader, epoch=0, writer=None, score=True)[1]
     individual_score = score / folds
     print("Score ", individual_score)
     return individual_score
@@ -284,8 +274,8 @@ def run():
     crossover_rate = 1
 
     population = population_generator([], population_size)
-    pop_scores = {k:[] for k in range(0,iterations)}
-    for iteration in range(0,iterations):
+    pop_scores = {k: [] for k in range(0, iterations)}
+    for iteration in range(0, iterations):
         for individual in population:
             print(f"Individual params: {individual}")
             score = cross_val(individual)
@@ -293,5 +283,8 @@ def run():
             individual["score"] = score
         new_pop = sorted(population, key=lambda k: k["score"])
         new_pop = evolve(new_pop, lamda, mutation_rate, crossover_rate)
-    print(new_pop)
+    print(f"Final population: {new_pop}")
     return new_pop, pop_scores
+
+if __name__ == "__main__":
+    run()
