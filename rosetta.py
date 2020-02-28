@@ -77,7 +77,6 @@ def test_model(model, test_loader, epoch, writer=None, score=False):
         df = pd.DataFrame({"real": targets.view(-1), "preds": outputs}).fillna(0)
         df = df.corr().fillna(0)
         score = abs(df["preds"]["real"])
-        print(f"Crossval single score: {score}")
         return test_loss, score
     else:
         return test_loss

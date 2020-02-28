@@ -63,21 +63,34 @@ dataset = load_data()
 
 def population_generator(pop, pop_size):
     """Generate a random population of size pop_size."""
-    for _ in range(pop_size + 1):
-        epochs = np.random.randint(low=1, high=100)
-        pop.append(
-            {
-                "N1": np.random.randint(low=4, high=64),
-                "N2": np.random.randint(low=4, high=64),
-                "lr": np.random.randint(low=1, high=10) * 1e-4,
-                "gamma": np.random.random_sample(),
-                "batch_size_train": np.random.randint(low=32, high=512),
-                "epochs": epochs,
-                "out_features": np.random.randint(low=1, high=15),
-                "leaky_relu": bool(random.getrandbits(1)),
-                "dropout": np.random.random_sample() * 0.7,
-            }
-        )
+    # for _ in range(pop_size + 1):
+    #     epochs = np.random.randint(low=1, high=100)
+    #     pop.append(
+    #         {
+    #             "N1": np.random.randint(low=4, high=64),
+    #             "N2": np.random.randint(low=4, high=64),
+    #             "lr": np.random.randint(low=1, high=10) * 1e-4,
+    #             "gamma": np.random.random_sample(),
+    #             "batch_size_train": np.random.randint(low=32, high=512),
+    #             "epochs": epochs,
+    #             "out_features": np.random.randint(low=1, high=15),
+    #             "leaky_relu": bool(random.getrandbits(1)),
+    #             "dropout": np.random.random_sample() * 0.7,
+    #         }
+    #     )
+    pop = [{'N1': 18, 'N2': 53, 'lr': 0.0009000000000000001, 'step_size': 16, 'gamma': 0.9567112447233481, 'batch_size_train': 176, 'epochs': 52, 'out_features': 14, 'leaky_relu': False, 'dropout': False},
+{'N1': 36, 'N2': 9, 'lr': 0.00030000000000000003, 'gamma': 0.3447454391800292, 'batch_size_train': 60, 'epochs': 17, 'out_features': 12, 'leaky_relu': False, 'dropout': 0.10932128600853393},
+{'N1': 22, 'N2': 38, 'lr': 0.0002, 'gamma': 0.26551970832431127, 'batch_size_train': 215, 'epochs': 70, 'out_features': 3, 'leaky_relu': False, 'dropout': 0.16290902685175007, 'score': 0.061367278685044886},
+{'N1': 36, 'N2': 9, 'lr': 0.00030000000000000003, 'gamma': 0.3447454391800292, 'batch_size_train': 60, 'epochs': 17, 'out_features': 12, 'leaky_relu': False, 'dropout': 0.10932128600853393},
+{'N1': 51, 'N2': 53, 'lr': 0.0002, 'gamma': 0.26551970832431127, 'batch_size_train': 215, 'epochs': 70, 'out_features': 3, 'leaky_relu': False, 'dropout': 0.16290902685175007},
+{'N1': 40, 'N2': 59, 'lr': 0.00030000000000000003, 'gamma': 0.8951150444189663, 'batch_size_train': 175, 'epochs': 48, 'out_features': 13, 'leaky_relu': 0, 'dropout': 0.3378680021197293},
+{'N1': 51, 'N2': 53, 'lr': 0.0002, 'gamma': 0.26551970832431127, 'batch_size_train': 215, 'epochs': 70, 'out_features': 3, 'leaky_relu': False, 'dropout': 0.16290902685175007},
+{'N1': 22, 'N2': 38, 'lr': 0.0004, 'gamma': 0.8507229405017469, 'batch_size_train': 279, 'epochs': 71, 'out_features': 13, 'leaky_relu': False, 'dropout': 0.12805402705224658},
+{'N1': 33, 'N2': 53, 'lr': 0.00030000000000000003, 'gamma': 0.5515892356258006, 'batch_size_train': 215, 'epochs': 70, 'out_features': 3, 'leaky_relu': False, 'dropout': 0.16290902685175007},
+{'N1': 51, 'N2': 53, 'lr': 0.0002, 'gamma': 0.26551970832431127, 'batch_size_train': 166, 'epochs': 42, 'out_features': 1, 'leaky_relu': True, 'dropout': 0.21402957775830403, 'score': 0.07920200393107506},
+{'N1': 36, 'N2': 9, 'lr': 0.00030000000000000003, 'gamma': 0.3447454391800292, 'batch_size_train': 60, 'epochs': 17, 'out_features': 12, 'leaky_relu': False, 'dropout': 0.10932128600853393},
+{'N1': 22, 'N2': 38, 'lr': 0.0004, 'gamma': 0.8507229405017469, 'batch_size_train': 279, 'epochs': 71, 'out_features': 13, 'leaky_relu': False, 'dropout': 0.12805402705224658}]
+
     return pop
 
 
@@ -107,10 +120,10 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
                     "dropout",
                     None,
                 ],
-                p=[(mutation_rate) / 10 for i in range(1, 10)] + [1 - mutation_rate],
+                p=[(mutation_rate) / 9 for i in range(0, 9)] + [1 - mutation_rate],
             )
             if mutate_param != None:
-                print("Mutating {}:{}".format(mutate_param, individual[mutate_param]))
+                # print("Mutating {}:{}".format(mutate_param, individual[mutate_param]))
                 if isinstance(individual[mutate_param], np.bool_):
                     if individual[mutate_param] == True:
                         m = 1
@@ -133,9 +146,9 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
                     )
                     if (individual[mutate_param] / 1).is_integer():
                         individual[mutate_param] = int(mutated)
-                print(
-                    "Mutated to {}:{}\n".format(mutate_param, individual[mutate_param])
-                )
+                # print(
+                #     "Mutated to {}:{}\n".format(mutate_param, individual[mutate_param])
+                # )
 
     # Crossover
     if crossover_rate != None:
@@ -156,11 +169,11 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
         for individual in range(len(cross1)):
             cross_param = np.random.choice(params)
             idx = params.index(cross_param)
-            print(
-                "Crossing {}\nwith\n{}\nAt position {}:{}\n".format(
-                    cross1[individual], cross2[individual], idx, params[idx]
-                )
-            )
+            # print(
+            #     "Crossing {}\nwith\n{}\nAt position {}:{}\n".format(
+            #         cross1[individual], cross2[individual], idx, params[idx]
+            #     )
+            # )
 
             for i in range(idx, len(params)):
                 cross1[individual][params[i]], cross2[individual][params[i]] = (
@@ -220,14 +233,12 @@ def cross_val(individual):
     # Shuffle data
     np.random.shuffle(dataset)
 
-    # Init Score
-    score = 0
 
-    # Splitting validation from training
+    cross_val_scores = []
     for i in range(folds):
-        print(
-            f"-------------------- Validate/Train separation {i} --------------------"
-        )
+        # print(
+        #     f"-------------------- Validate/Train separation {i} --------------------"
+        # )
 
         # Split data into validation and training set
         validate, train = split(dataset, i * split_size, split_size)
@@ -254,30 +265,34 @@ def cross_val(individual):
                 optimizer,
                 epoch,
                 log_interval=1000,
-                scheduler=scheduler,
                 writer=writer,
             )
 
         # test model on val set
-        score += test_model(model, val_loader, epoch=0, writer=None, score=True)[1]
-    individual_score = score / folds
-    print("Score ", individual_score)
+        score = test_model(model, val_loader, epoch=0, writer=None, score=True)[1]
+        cross_val_scores.append(score)
+
+    individual_score = np.sum(cross_val_scores)/folds
+    if any(i>0.08 for i in cross_val_scores):
+        print(f"Crossval scores: {cross_val_scores}")
+        print("Average Score ", individual_score)
     return individual_score
 
 
 def run():
     """Run the whole evolutionary algorithm pipeline for a given number of iterations."""
-    iterations = 10
-    population_size = 25
+    iterations = 15
+    population_size = 10
     lamda = 0.1
-    mutation_rate = 1
-    crossover_rate = 1
+    mutation_rate = 0.1
+    crossover_rate = 0.5
 
     population = population_generator([], population_size)
     pop_scores = {k: [] for k in range(0, iterations)}
     for iteration in range(0, iterations):
         for individual in population:
             print(f"Individual params: {individual}")
+
             score = cross_val(individual)
             pop_scores[iteration].append(score)
             individual["score"] = score
