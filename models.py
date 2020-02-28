@@ -23,31 +23,29 @@ class View(nn.Module):
 
 
 class RecursiveNN_Linear(nn.Module):
-    def __init__(self, in_features, N1, N2, out_features):
+    def __init__(self, in_features, N1, N2, out_features, leaky_relu=False, dropout=0.5):
         super().__init__()
 
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(dropout)
 
-        self.batchnorm1a = nn.BatchNorm1d(N1)
+        self.activation = F.leaky_relu if leaky_relu else F.relu
+        self.activation_kwargs = {'negative_slope':0.4} if leaky_relu else {}
+
         self.linear1a = nn.Linear(
             in_features=in_features, out_features=N1, bias=True
                                 )
-        self.batchnorm2a = nn.BatchNorm1d(N2)
         self.linear2a = nn.Linear(
             in_features=N1, out_features=N2, bias=True
         )
 
-        self.batchnorm3a = nn.BatchNorm1d(out_features)
         self.linear3a = nn.Linear(
             in_features=N2, out_features=out_features, bias=True
         )
 
-        self.batchnorm1b = nn.BatchNorm1d(N1)
         self.linear1b = nn.Linear(
             in_features=10+out_features, out_features=N1, bias=True
                                 )
 
-        self.batchnorm2b = nn.BatchNorm1d(N2)
         self.linear2b = nn.Linear(
             in_features=N1, out_features=N2, bias=True
         )
@@ -57,32 +55,26 @@ class RecursiveNN_Linear(nn.Module):
         )
 
     def forward(self, laser_inputs, other_features):
-        ns = 0.8
 
         out = self.linear1a(laser_inputs)
-        out = F.leaky_relu(out,negative_slope=ns)
-        # out = self.batchnorm1a(out)
+        out = self.activation(out,**self.activation_kwargs)
         out = self.dropout(out)
 
         out = self.linear2a(out)
-        out = F.leaky_relu(out,negative_slope=ns)
-        # out = self.batchnorm2a(out)
+        out = self.activation(out,**self.activation_kwargs)
         out = self.dropout(out)
 
         out = self.linear3a(out)
-        out = F.leaky_relu(out,negative_slope=ns)
-        # out = self.batchnorm3a(out)
+        out = self.activation(out,**self.activation_kwargs)
 
         out = torch.cat((out, other_features), dim=1)
 
         out = self.linear1b(out)
-        out = F.leaky_relu(out,negative_slope=ns)
-        # out = self.batchnorm1b(out)
+        out = self.activation(out,**self.activation_kwargs)
         out = self.dropout(out)
 
         out = self.linear2b(out)
-        out = F.leaky_relu(out,negative_slope=ns)
-        # out = self.batchnorm2b(out)
+        out = self.activation(out,**self.activation_kwargs)
         out = self.dropout(out)
 
         out = self.linear3b(out)

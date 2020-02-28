@@ -4,8 +4,8 @@ from collections import namedtuple
 import datetime
 # ML
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
 # DL
 import torch
 import torch.nn.functional as F
@@ -34,19 +34,19 @@ def train_model(
         optimizer.zero_grad()
         outputs = model(lsr, feats)
 
-        loss = F.smooth_l1_loss(outputs, targets.view(-1))
-        # loss = F.mse_loss(outputs, targets.view(-1))
+        # loss = F.smooth_l1_loss(outputs, targets.view(-1))
+        loss = F.mse_loss(outputs, targets.view(-1))
         tloss +=loss.item()
 
         loss.backward()
 
         optimizer.step()
 
-    print(
-        "Train Epoch: {:02d} -- Batch: {:03d} -- Loss: {:.4f}".format(
-            epoch, batch_idx, tloss
-        )
-    )
+    # print(
+    #     "Train Epoch: {:02d} -- Batch: {:03d} -- Loss: {:.4f}".format(
+    #         epoch, batch_idx, tloss
+    #     )
+    # )
 
     # Write loss to tensorboard
     if writer != None:
@@ -56,7 +56,7 @@ def train_model(
 
 
 def test_model(
-    model, test_loader, epoch, writer=None, scaler=None, upsample=False, score=False
+    model, test_loader, epoch, writer=None, score=False
 ):
     """Output test loss and/or score for one epoch."""
 
@@ -65,20 +65,18 @@ def test_model(
     with torch.no_grad():
         for lsr, feats, targets in test_loader:
             outputs = model(lsr, feats)
-            if upsample:
-                targets = torch.tensor(scaler.transform(targets.reshape(-1,1)).ravel())
-                targets = targets.float()
-            test_loss += F.smooth_l1_loss(outputs, targets).item()
+            test_loss += F.mse_loss(outputs, targets.view(-1)).item()
 
-    print("\nTest set: Average loss: {:.4f}\n".format(test_loss))
+    # print("\nTest set: Average loss: {:.4f}\n".format(test_loss))
 
     # Write loss to tensorboard
     if writer != None:
         writer.add_scalar("Test/Loss", test_loss, epoch)
     if score: # For evolutionary algorithms
-        df = pd.DataFrame({"real": targets, "preds": outputs}).fillna(0)
+        df = pd.DataFrame({"real": targets.view(-1), "preds": outputs}).fillna(0)
         df = df.corr().fillna(0)
-        score = df["preds"]["real"]
+        score = abs(df["preds"]["real"])
+        print(f"Crossval single score: {score}")
         return test_loss, score
     else:
         return test_loss
@@ -90,7 +88,6 @@ class Rosetta:
 
     def __init__(self, mode="extract", bSave="T", bUseConv=False):
         self.mode = mode
-        self.scaler = None
 
         if bSave is "T":
             self.bSave = False
@@ -132,49 +129,33 @@ class Rosetta:
                 }
         else:
             self.params = {
-                "N1" : 64,
-                "N2" : 32,
-                "lr" : 2e-4,
-                "step_size" : 5,
-                "gamma" : 0.8,
-                "batch_size_train" : 32,
+                "N1" : 35,
+                "N2" : 54,
+                "lr" : 0.0004,
+                "step_size" : 25,
+                "gamma" : 0.17,
+                "batch_size_train" : 394,
                 "batch_size_test": 128,
-                "epochs": 30,
+                'out_features': 13,
+                "epochs": 69,
                 'upsampling_factor':5000,
-                'upsample': False
+                'upsample': False,
+                'dropout': False,
+                'leaky_relu': False
             }
+# {'N1': 45, 'N2': 8, 'lr': 0.0004, 'step_size': 8, 'gamma': 0.27309101137730163, 'batch_size_train': 221, 'epochs': 16, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
+# {'N1': 35, 'N2': 54, 'lr': 0.0004, 'step_size': 25, 'gamma': 0.17070707330410118, 'batch_size_train': 394, 'epochs': 69, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
 
-    def preprocess(self, scores, lsr, nlp):
+    def upsample(self, scores, lsr, nlp):
 
         if self.params['upsample']:
+             # Define parameters
+            alpha = 0.45
+            beta = 15
+            gamma = 0.05
 
             if self.bUseConv:
                 lsr = lsr.reshape(-1, 2048)
-            scores = scores.reshape(-1,1)
-
-            idxs = np.nonzero((scores.ravel()<1.6)&(scores.ravel()>-3.5)) # Get indices to keep
-            filtered_lsr = lsr[idxs]
-            filtered_nlp = nlp[idxs]
-            filtered_scores = scores[idxs]
-
-            self.scaler = MinMaxScaler((-1,1))
-            self.scaler.fit(filtered_scores)
-            scaled_scores = self.scaler.transform(filtered_scores)
-
-            n, bins, patches = plt.hist(scaled_scores, 15, density=True, range=(-1, 1), facecolor='g', alpha=0.75)
-
-            prob_dist = np.ones(len(n))-n*0.35
-            prob_dist = prob_dist**15/sum(prob_dist)
-
-            dump(self.scaler, 'scaler.joblib')
-
-            probs = np.ones(len(scaled_scores))
-            scaled_scores = scaled_scores.ravel()
-            for idx in range(len(bins)-1):
-                probs[(scaled_scores>bins[idx])&(scaled_scores<bins[idx+1])] = 1*prob_dist[idx]
-            scaled_probs = probs/sum(probs)
-
-            idxs = np.random.choice(list(range(len(scaled_scores))), p=scaled_probs, size=self.params['upsampling_factor'])
 
             # Retrieve score distribution in 15 bins
             n, bins, _ = plt.hist(
@@ -206,7 +187,7 @@ class Rosetta:
                 size=self.params["upsampling_factor"],
             )
 
-            # Create upsampling data subset with random noise
+            # Create upsampling data subset with random noise 
             augmented_lsr = np.zeros((len(idxs), lsr.shape[1]))
             augemented_nlp = np.zeros((len(idxs), nlp.shape[1]))
             augmented_scores = np.zeros((len(idxs), scores.shape[1]))
@@ -236,8 +217,9 @@ class Rosetta:
             final_lsr = lsr
             final_nlp = nlp
             final_scores = scores
-        res = namedtuple("res", ['lsr', 'feats', 'scores'])(
-                    lsr=final_lsr, feats=final_nlp, scores=final_scores)
+        res = namedtuple("res", ["lsr", "feats", "scores"])(
+            lsr=final_lsr, feats=final_nlp, scores=final_scores
+        )
 
         return res
 
@@ -333,7 +315,7 @@ class Rosetta:
             )
         else:
             model = RecursiveNN_Linear(
-                in_features=2048, N1=self.params["N1"], N2=self.params["N2"], out_features=5
+                in_features=2048, N1=self.params["N1"], N2=self.params["N2"], out_features=self.params['out_features']
             )  # 2048
 
         model = model.to(device)
@@ -347,9 +329,10 @@ class Rosetta:
         print(model)
 
         optimizer = optim.Adam(model.parameters(), lr=self.params["lr"])
-        scheduler = optim.lr_scheduler.StepLR(
-            optimizer, step_size=self.params["step_size"], gamma=self.params["gamma"]
-        )
+        # scheduler = optim.lr_scheduler.StepLR(
+        #     optimizer, step_size=self.params["step_size"], gamma=self.params["gamma"]
+        # )
+        scheduler = None
 
         date_string = (
             str(datetime.datetime.now())[:16].replace(":", "-").replace(" ", "-")
@@ -371,8 +354,6 @@ class Rosetta:
                 dev_loader,
                 epoch,
                 writer=writer,
-                scaler=self.scaler,
-                upsample=self.self.params["upsample"],
             )
 
         torch.save(model, "model.pt")
