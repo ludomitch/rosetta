@@ -6,60 +6,17 @@ import copy
 
 # ML
 import torch
-import torch.utils.data as data_utils
 from torch.utils.tensorboard import SummaryWriter
 
 from models import RecursiveNN_Linear
-from rosetta import Rosetta, train_model, test_model
-from utils import create_loader
+from rosetta import train_model, test_model
+from utils import create_loader, load_features
 
 logdir = "./logs/"
 
 folds = 3
 
-
-def load_data():
-    """Load and combine training data from both train and dev datasets."""
-    trainlsr = np.load("saved_features/train_lsr.npy", allow_pickle=True)
-    trainnlp = np.load("saved_features/train_nlp.npy", allow_pickle=True)
-    trainsc = np.load("saved_features/train_scores.npy", allow_pickle=True)
-
-    devlsr = np.load("saved_features/dev_lsr.npy", allow_pickle=True)
-    devnlp = np.load("saved_features/dev_nlp.npy", allow_pickle=True)
-    devsc = np.load("saved_features/dev_scores.npy", allow_pickle=True)
-    trainlsr = trainlsr.reshape(-1, 2048)
-    devlsr = devlsr.reshape(-1, 2048)
-
-    all_train_lsr = np.append(trainlsr, devlsr, axis=0)
-    all_train_nlp = np.append(trainnlp, devnlp, axis=0)
-    all_train_sc = np.append(trainsc, devsc, axis=0)
-    ros = Rosetta(mode="no_extract")
-    train = ros.upsample(all_train_sc, all_train_lsr, all_train_nlp)
-    train_ = np.concatenate(
-        (train.lsr, train.feats, train.scores.reshape(-1, 1)), axis=1
-    )
-    return train_
-
-
-def create_loader(data, batch_size, validate=False):
-    """Create a dataloader."""
-
-    if validate:
-        batch_size = data.shape[0]
-    else:
-        batch_size = individual["batch_size_train"]
-    dataset = data_utils.TensorDataset(
-        *[
-            torch.Tensor(data[:, :2048]),
-            torch.Tensor(data[:, 2048:2058]),
-            torch.Tensor(data[:, 2058:]),
-        ]
-    )
-    loader = data_utils.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    return loader
-
-
-dataset = load_data()
+dataset, _ = load_features(split=False, nt=False)
 
 
 def population_generator(pop, pop_size):
@@ -79,12 +36,7 @@ def population_generator(pop, pop_size):
     #             "dropout": np.random.random_sample() * 0.7,
     #         }
     #     )
-    pop = [{'N1': 40, 'N2': 12, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 35, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False},
-{'N1': 24, 'N2': 12, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 25, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False, 'score': 0.08514838280631369},
-{'N1': 40, 'N2': 12, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 29, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.2, 'leaky_relu': False},
-{'N1': 48, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 13, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True},
-{'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 29, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False, 'score': 0.10681842918412339},
-{'N1': 40, 'N2': 20, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 27, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': True}]
+    pop = [{'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 24, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False}, {'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 29, 'epochs': 29, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 24, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}]
 
     return pop
 

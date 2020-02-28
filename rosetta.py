@@ -18,6 +18,7 @@ from torch.utils.tensorboard import SummaryWriter
 # In house
 from models import RecursiveNN, RecursiveNN_Linear, ModelBlock, weights_init
 from feature_extraction import FeatureExtractor
+from utils import load_features, create_loader
 
 logdir = "./logs/"
 
@@ -130,22 +131,11 @@ class Rosetta:
             self.params = {'N1': 40, 'N2': 12, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 29, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False}
 
 
- # {'N1': 16,
- # 'N2': 32,
- # 'batch_size_test': 100,
- # 'batch_size_train': 300,
- # 'dropout': 0,
- # 'epochs': 30,
- # 'leaky_relu': False,
- # 'lr': 0.0005,
- # 'out_features': 15,
- # 'upsample': False,
- # 'upsampling_factor': 5000}
+    def upsample(self, data):
 
-    # {'N1': 45, 'N2': 8, 'lr': 0.0004, 'step_size': 8, 'gamma': 0.27309101137730163, 'batch_size_train': 221, 'epochs': 16, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
-    # {'N1': 35, 'N2': 54, 'lr': 0.0004, 'step_size': 25, 'gamma': 0.17070707330410118, 'batch_size_train': 394, 'epochs': 69, 'out_features': 13, 'leaky_relu': False, 'dropout': False}
-
-    def upsample(self, scores, lsr, nlp):
+        nlp = data.feats
+        scores = data.scores
+        lsr = data.lsr
 
         if self.params["upsample"]:
             # Define parameters
@@ -217,11 +207,17 @@ class Rosetta:
 
         return res
 
-    def normalise(self, dataset):
-        return (dataset - self.min_train) / (self.max_train - self.min_train)
-
-    def de_normalise(self, dataset):
-        return dataset * (self.max_train - self.min_train) + self.min_train
+    def write_predictions(self):
+        res = FeatureExtractor('test').run()
+        model = torch.load('model.pt')
+        test = namedtuple("res", ['lsr', 'feats', 'scores'])(
+        lsr=res.lsr.reshape(-1, 2048), feats=res.feats, scores=res.scores)
+        dev_ = data_utils.TensorDataset(*[torch.tensor(getattr(test, i)).float() for i in ['lsr', 'feats', 'scores']])
+        with torch.no_grad():
+            preds = model.forward(*dev_.tensors[:2]).cpu().numpy()
+        np.set_printoptions(suppress=True)
+        np.savetxt('predictions.txt', preds.astype(float), delimiter='\n',fmt='%f')
+        print("Predictions saved to predictions.txt")
 
     def run(self):
         """Run whole data loading, feature extraction, model training and regressing pipeline."""
@@ -239,69 +235,14 @@ class Rosetta:
             np.save("saved_features/dev_scores", dev.scores)
         else:  # Load saved extracted features
             print("Loading saved features")
-            trainlsr = np.load("saved_features/train_lsr.npy", allow_pickle=True)
-            trainnlp = np.load("saved_features/train_nlp.npy", allow_pickle=True)
-            trainsc = np.load("saved_features/train_scores.npy", allow_pickle=True)
+            split = False if self.full_data else True
+            train, dev = load_features(split=split, nt=True)
 
-            devlsr = np.load("saved_features/dev_lsr.npy", allow_pickle=True)
-            devnlp = np.load("saved_features/dev_nlp.npy", allow_pickle=True)
-            devsc = np.load("saved_features/dev_scores.npy", allow_pickle=True)
+        if self.params['upsample']:
+            train = self.upsample(train)
 
-            # self.min_train = np.min(trainlsr, axis=0)
-            # self.max_train = np.max(trainlsr, axis=0)
-
-            # trainlsr = self.normalise(trainlsr)
-            # devlsr = self.normalise(devlsr)
-
-            if not self.bUseConv:
-                trainlsr = trainlsr.reshape(-1, 2048)
-                devlsr = devlsr.reshape(-1, 2048)
-
-        dev = namedtuple("res", ["lsr", "feats", "scores"])(
-            lsr=devlsr, feats=devnlp, scores=devsc
-        )
-
-        # Upsample training set if necessary
-        if self.full_data:
-            all_train_lsr = np.append(trainlsr, devlsr, axis=0)
-            all_train_nlp = np.append(trainnlp, devnlp, axis=0)
-            all_train_sc = np.append(trainsc, devsc, axis=0)
-            res = namedtuple("res", ["lsr", "feats", "scores"])(
-                lsr=all_train_lsr, feats=all_train_nlp, scores=all_train_sc
-            )
-            train_ = data_utils.TensorDataset(
-                *[
-                    torch.tensor(getattr(res, i)).float()
-                    for i in ["lsr", "feats", "scores"]
-                ]
-            )
-            train_loader = data_utils.DataLoader(
-                train_, batch_size=self.params["batch_size_train"], shuffle=True
-            )
-
-
-        else:
-            train = self.upsample(trainsc, trainlsr, trainnlp)
-
-            train_ = data_utils.TensorDataset(
-                *[
-                    torch.tensor(getattr(train, i)).float()
-                    for i in ["lsr", "feats", "scores"]
-                ]
-            )
-            train_loader = data_utils.DataLoader(
-                train_, batch_size=self.params["batch_size_train"], shuffle=True
-            )
-
-        dev_ = data_utils.TensorDataset(
-            *[torch.tensor(getattr(dev, i)).float() for i in ["lsr", "feats", "scores"]]
-        )
-        dev_loader = data_utils.DataLoader(
-            dev_, batch_size=self.params["batch_size_test"], shuffle=True
-        )
-
-        # test_ = data_utils.TensorDataset(*[torch.tensor(getattr(test, i)) for i in ['lsr', 'feats', 'scores']])
-        # test_loader = data_utils.DataLoader(test_, batch_size = batch_size_test, shuffle = True)
+        train_loader = create_loader(train, self.params['batch_size_train'])
+        dev_loader = create_loader(dev, validate=True)
 
         # We set a random seed to ensure that results are reproducible.
         # Also set a cuda GPU if available
