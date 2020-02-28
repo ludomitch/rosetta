@@ -21,23 +21,22 @@ dataset, _ = load_features(split=False, nt=False)
 
 def population_generator(pop, pop_size):
     """Generate a random population of size pop_size."""
-    # for _ in range(pop_size + 1):
-    #     epochs = np.random.randint(low=1, high=100)
-    #     pop.append(
-    #         {
-    #             "N1": np.random.randint(low=4, high=64),
-    #             "N2": np.random.randint(low=4, high=64),
-    #             "lr": np.random.randint(low=1, high=10) * 1e-4,
-    #             "gamma": np.random.random_sample(),
-    #             "batch_size_train": np.random.randint(low=32, high=512),
-    #             "epochs": epochs,
-    #             "out_features": np.random.randint(low=1, high=15),
-    #             "leaky_relu": bool(random.getrandbits(1)),
-    #             "dropout": np.random.random_sample() * 0.7,
-    #         }
-    #     )
-    pop = [{'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 24, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False}, {'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 29, 'epochs': 29, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 24, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}]
-
+    for _ in range(pop_size + 1):
+        epochs = np.random.randint(low=1, high=100)
+        pop.append(
+            {
+                "N1": np.random.randint(low=4, high=64),
+                "N2": np.random.randint(low=4, high=64),
+                "lr": np.random.randint(low=1, high=10) * 1e-4,
+                "gamma": np.random.random_sample(),
+                "batch_size_train": np.random.randint(low=32, high=512),
+                "epochs": epochs,
+                "out_features": np.random.randint(low=1, high=15),
+                "leaky_relu": bool(random.getrandbits(1)),
+                "dropout": np.random.random_sample() * 0.7,
+            }
+        )
+    pop = [{'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': 1}, {'N1': 40, 'N2': 8, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': 0}, {'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': 1}]
     return pop
 
 
@@ -86,8 +85,8 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
                         individual[mutate_param] = False
                     else:
                         individual[mutate_param] = True
-                    if mutate_param=='dropout':
-                        individual[mutate_param] = min(individual[mutate_param],0.9)
+                    if mutate_param == "dropout":
+                        individual[mutate_param] = min(individual[mutate_param], 0.9)
 
                 else:
                     mutated = np.random.choice(
@@ -118,11 +117,11 @@ def evolve(pop, lamda, mutation_rate, crossover_rate):
         for individual in range(len(cross1)):
             cross_param = np.random.choice(params)
             idx = params.index(cross_param)
-            # print(
-            #     "Crossing {}\nwith\n{}\nAt position {}:{}\n".format(
-            #         cross1[individual], cross2[individual], idx, params[idx]
-            #     )
-            # )
+            print(
+                "Crossing {}\nwith\n{}\nAt position {}:{}\n".format(
+                    cross1[individual], cross2[individual], idx, params[idx]
+                )
+            )
 
             for i in range(idx, len(params)):
                 cross1[individual][params[i]], cross2[individual][params[i]] = (
@@ -155,7 +154,7 @@ def init_params(train, validate, individual):
     )  # Create model with hyperparmeters "N1" and "N2"
 
     # Create clean loaders here
-    loader_train = create_loader(train, individual['batch_size_train'])
+    loader_train = create_loader(train, individual["batch_size_train"])
     loader_val = create_loader(validate, validate=True)
 
     return model, loader_train, loader_val
@@ -181,7 +180,6 @@ def cross_val(individual):
     split_size = int(dataset.shape[0] / folds)
     # Shuffle data
     np.random.shuffle(dataset)
-
 
     cross_val_scores = []
     for i in range(folds):
@@ -210,12 +208,7 @@ def cross_val(individual):
         for epoch in range(individual["epochs"]):
             model.train()
             train_model(
-                model,
-                train_loader,
-                optimizer,
-                epoch,
-                log_interval=1000,
-                writer=writer,
+                model, train_loader, optimizer, epoch, log_interval=1000, writer=writer
             )
 
         # test model on val set
@@ -223,8 +216,8 @@ def cross_val(individual):
         score = test_model(model, val_loader, epoch=0, writer=writer, score=True)[1]
         cross_val_scores.append(score)
 
-    individual_score = np.sum(cross_val_scores)/folds
-    if any(i>0.1 for i in cross_val_scores):
+    individual_score = np.sum(cross_val_scores) / folds
+    if any(i > 0.1 for i in cross_val_scores):
         print(f"Crossval scores: {cross_val_scores}")
         print("Average Score ", individual_score)
     return individual_score
@@ -232,24 +225,32 @@ def cross_val(individual):
 
 def run():
     """Run the whole evolutionary algorithm pipeline for a given number of iterations."""
+
+    # Evolutionary config
     iterations = 15
-    population_size = 6
+    population_size = 20
     lamda = 0.5
-    mutation_rate = 0.2
-    crossover_rate = 0.4
+    mutation_rate = 0.1
+    crossover_rate = 0.5
+
+    # Generate initial random population
     population = population_generator([], population_size)
+    # Keep track of population scores at each iteration
     pop_scores = {k: [] for k in range(0, iterations)}
     for iteration in range(0, iterations):
         for individual in population:
             print(f"Individual params: {individual}")
-
+            # Run k-fold cross val on one individual
             score = cross_val(individual)
             pop_scores[iteration].append(score)
             individual["score"] = score
+
+        # Sort population and transmit/crossover/mutate
         new_pop = sorted(population, key=lambda k: k["score"])
         new_pop = evolve(new_pop, lamda, mutation_rate, crossover_rate)
     print(f"Final population: {new_pop}")
     return new_pop, pop_scores
+
 
 if __name__ == "__main__":
     run()

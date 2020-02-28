@@ -5,13 +5,11 @@ import numpy as np
 import torch
 import torch.utils.data as data_utils
 
+
 def create_loader(data, batch_size=500, validate=False):
     """Create a dataloader."""
 
-    if validate:
-        batch_size = data.shape[0]
-
-    if isinstance(data,np.ndarray):
+    if isinstance(data, np.ndarray):
         dataset = data_utils.TensorDataset(
             *[
                 torch.Tensor(data[:, :2048]),
@@ -19,15 +17,21 @@ def create_loader(data, batch_size=500, validate=False):
                 torch.Tensor(data[:, 2058:]),
             ]
         )
+        if validate:
+            batch_size = data.shape[0]
     else:
         dataset = data_utils.TensorDataset(
-                *[
-                    torch.tensor(getattr(data, i)).float()
-                    for i in ["lsr", "feats", "scores"]
-                ]
-            )
+            *[
+                torch.tensor(getattr(data, i)).float()
+                for i in ["lsr", "feats", "scores"]
+            ]
+        )
+        if validate:
+            batch_size = data.lsr.shape[0]
+
     loader = data_utils.DataLoader(dataset, batch_size=batch_size, shuffle=True)
     return loader
+
 
 def load_features(split=True, nt=False):
     """Load and combine training data from both train and dev datasets."""
@@ -64,4 +68,3 @@ def load_features(split=True, nt=False):
             (all_train_lsr, all_train_nlp, all_train_sc.reshape(-1, 1)), axis=1
         )
     return res, dev
-

@@ -128,10 +128,25 @@ class Rosetta:
                 },
             }
         else:
-            self.params = {'N1': 40, 'N2': 12, 'lr': 0.0003, 'batch_size_train': 500, 'batch_size_test': 100, 'out_features': 29, 'epochs': 30, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0, 'leaky_relu': False}
-
+            self.params ={
+                         'N1': 40,
+                         'N2': 20,
+                         'batch_size_test': 100,
+                         'batch_size_train': 500,
+                         'dropout': 0,
+                         'epochs': 30,
+                         'leaky_relu': True,
+                         'lr': 0.0003,
+                         'out_features': 27,
+                         'score': 0.09012854763115952,
+                         'upsample': False,
+                         'upsampling_factor': 5000,
+                         'step_size': 40,
+                         'gamma': 0.5
+                         }
 
     def upsample(self, data):
+        """Upsample data to make score distribution more uniform."""
 
         nlp = data.feats
         scores = data.scores
@@ -208,15 +223,23 @@ class Rosetta:
         return res
 
     def write_predictions(self):
-        res = FeatureExtractor('test').run()
-        model = torch.load('model.pt')
-        test = namedtuple("res", ['lsr', 'feats', 'scores'])(
-        lsr=res.lsr.reshape(-1, 2048), feats=res.feats, scores=res.scores)
-        dev_ = data_utils.TensorDataset(*[torch.tensor(getattr(test, i)).float() for i in ['lsr', 'feats', 'scores']])
+        """Output the predictions to a text file."""
+
+        res = FeatureExtractor("test").run()
+        model = torch.load("model.pt")
+        test = namedtuple("res", ["lsr", "feats", "scores"])(
+            lsr=res.lsr.reshape(-1, 2048), feats=res.feats, scores=res.scores
+        )
+        dev_ = data_utils.TensorDataset(
+            *[
+                torch.tensor(getattr(test, i)).float()
+                for i in ["lsr", "feats", "scores"]
+            ]
+        )
         with torch.no_grad():
             preds = model.forward(*dev_.tensors[:2]).cpu().numpy()
         np.set_printoptions(suppress=True)
-        np.savetxt('predictions.txt', preds.astype(float), delimiter='\n',fmt='%f')
+        np.savetxt("predictions.txt", preds.astype(float), delimiter="\n", fmt="%f")
         print("Predictions saved to predictions.txt")
 
     def run(self):
@@ -238,10 +261,10 @@ class Rosetta:
             split = False if self.full_data else True
             train, dev = load_features(split=split, nt=True)
 
-        if self.params['upsample']:
+        if self.params["upsample"]:
             train = self.upsample(train)
 
-        train_loader = create_loader(train, self.params['batch_size_train'])
+        train_loader = create_loader(train, self.params["batch_size_train"])
         dev_loader = create_loader(dev, validate=True)
 
         # We set a random seed to ensure that results are reproducible.
@@ -273,9 +296,9 @@ class Rosetta:
                 N1=self.params["N1"],
                 N2=self.params["N2"],
                 out_features=self.params["out_features"],
-                dropout=self.params['dropout'],
-                leaky_relu=self.params['leaky_relu']
-            )  # 2048
+                dropout=self.params["dropout"],
+                leaky_relu=self.params["leaky_relu"],
+            ) 
 
         model = model.to(device)
 
@@ -288,10 +311,9 @@ class Rosetta:
         print(model)
 
         optimizer = optim.Adam(model.parameters(), lr=self.params["lr"])
-        # scheduler = optim.lr_scheduler.StepLR(
-        #     optimizer, step_size=self.params["step_size"], gamma=self.params["gamma"]
-        # )
-        scheduler = None
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer, step_size=self.params["step_size"], gamma=self.params["gamma"]
+        )
 
         date_string = (
             str(datetime.datetime.now())[:16].replace(":", "-").replace(" ", "-")
