@@ -39,8 +39,8 @@ def train_model(
         optimizer.zero_grad()
         outputs = model(lsr, feats)
 
-        # loss = F.smooth_l1_loss(outputs, targets.view(-1))
-        loss = F.mse_loss(outputs, targets.view(-1))
+        loss = F.smooth_l1_loss(outputs, targets.view(-1))
+        # loss = F.mse_loss(outputs, targets.view(-1))
         tloss += loss.item()
 
         loss.backward()
@@ -91,13 +91,6 @@ class Rosetta:
 
     def __init__(self, mode="extract", bSave="T", bUseConv=False):
         self.mode = mode
-        if bSave is 'T':
-            print('GONE SAVE')
-            self.bSave = False
-        else:
-            print('AINT GONE SAVE')
-            print('Please specify F or T next time, setting false .......')
-            self.bSave = False
 
         if bSave is "T":
             self.bSave = False
@@ -137,22 +130,22 @@ class Rosetta:
                 },
             }
         else:
-            self.params ={
-                         'N1': 40,
-                         'N2': 20,
-                         'batch_size_test': 100,
-                         'batch_size_train': 500,
-                         'dropout': 0,
-                         'epochs': 30,
-                         'leaky_relu': True,
-                         'lr': 0.0003,
-                         'out_features': 27,
-                         'score': 0.09012854763115952,
-                         'upsample': False,
-                         'upsampling_factor': 5000,
-                         'step_size': 40,
-                         'gamma': 0.5
-                         }
+            self.params = {
+                "N1": 40,
+                "N2": 20,
+                "batch_size_test": 100,
+                "batch_size_train": 500,
+                "dropout": 0,
+                "epochs": 30,
+                "leaky_relu": True,
+                "lr": 0.0003,
+                "out_features": 27,
+                "score": 0.09012854763115952,
+                "upsample": False,
+                "upsampling_factor": 5000,
+                "step_size": 40,
+                "gamma": 0.5,
+            }
 
     def upsample(self, data):
         """Upsample data to make score distribution more uniform."""
@@ -270,7 +263,6 @@ class Rosetta:
             split = False if self.full_data else True
             train, dev = load_features(split=split, nt=True)
 
-
         if self.params["upsample"]:
             train = self.upsample(train)
 
@@ -308,7 +300,7 @@ class Rosetta:
                 out_features=self.params["out_features"],
                 dropout=self.params["dropout"],
                 leaky_relu=self.params["leaky_relu"],
-            ) 
+            )
 
         model = model.to(device)
 
@@ -354,4 +346,3 @@ if __name__ == "__main__":
     args = parser.parse_args().__dict__
 
     Rosetta(args["mode"][0], args["save"][0]).run()
-

@@ -36,7 +36,86 @@ def population_generator(pop, pop_size):
                 "dropout": np.random.random_sample() * 0.7,
             }
         )
-    pop = [{'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': 1}, {'N1': 40, 'N2': 8, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 8, 'lr': 0.0003, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': 0}, {'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': True}, {'N1': 40, 'N2': 32, 'lr': 5e-05, 'batch_size_train': 100, 'batch_size_test': 100, 'out_features': 11, 'epochs': 20, 'upsampling_factor': 5000, 'upsample': False, 'dropout': 0.1, 'leaky_relu': 1}]
+    pop = [
+        {
+            "N1": 40,
+            "N2": 32,
+            "lr": 5e-05,
+            "batch_size_train": 100,
+            "batch_size_test": 100,
+            "out_features": 11,
+            "epochs": 20,
+            "upsampling_factor": 5000,
+            "upsample": False,
+            "dropout": 0.1,
+            "leaky_relu": True,
+        },
+        {
+            "N1": 40,
+            "N2": 8,
+            "lr": 0.0003,
+            "batch_size_train": 100,
+            "batch_size_test": 100,
+            "out_features": 11,
+            "epochs": 20,
+            "upsampling_factor": 5000,
+            "upsample": False,
+            "dropout": 0.1,
+            "leaky_relu": 1,
+        },
+        {
+            "N1": 40,
+            "N2": 8,
+            "lr": 5e-05,
+            "batch_size_train": 100,
+            "batch_size_test": 100,
+            "out_features": 11,
+            "epochs": 20,
+            "upsampling_factor": 5000,
+            "upsample": False,
+            "dropout": 0.1,
+            "leaky_relu": True,
+        },
+        {
+            "N1": 40,
+            "N2": 8,
+            "lr": 0.0003,
+            "batch_size_train": 100,
+            "batch_size_test": 100,
+            "out_features": 11,
+            "epochs": 20,
+            "upsampling_factor": 5000,
+            "upsample": False,
+            "dropout": 0.1,
+            "leaky_relu": 0,
+        },
+        {
+            "N1": 40,
+            "N2": 32,
+            "lr": 5e-05,
+            "batch_size_train": 100,
+            "batch_size_test": 100,
+            "out_features": 11,
+            "epochs": 20,
+            "upsampling_factor": 5000,
+            "upsample": False,
+            "dropout": 0.1,
+            "leaky_relu": True,
+        },
+        {
+            "N1": 40,
+            "N2": 32,
+            "lr": 5e-05,
+            "batch_size_train": 100,
+            "batch_size_test": 100,
+            "out_features": 11,
+            "epochs": 20,
+            "upsampling_factor": 5000,
+            "upsample": False,
+            "dropout": 0.1,
+            "leaky_relu": 1,
+        },
+    ]
     return pop
 
 
@@ -228,7 +307,7 @@ def run():
 
     # Evolutionary config
     iterations = 15
-    population_size = 20
+    population_size = 25
     lamda = 0.5
     mutation_rate = 0.1
     crossover_rate = 0.5
