@@ -1,143 +1,70 @@
-# -*- coding: utf-8 -*-
-"""Helper utilities and decorators."""
-import sys
-import time
-import urllib.request
-import zipfile
-import yaml
-from pathlib import Path
+from collections import namedtuple
 
-from tqdm import tqdm
-import nltk
-from colored import fg
+import numpy as np
 
-import kiwi
-from kiwi import constants as const
-from IPython.display import Markdown, display
-nltk.download('punkt')
+import torch
+import torch.utils.data as data_utils
 
-# Download and extract methods heavily based on TorchNLP
-# see https://pytorchnlp.readthedocs.io/en/latest/_modules/torchnlp/download.html#download_file_maybe_extract
-def download_kiwi(url, directory="trained_models"):
-    """Download file at `url`. Extract if needed"""
 
-    def _check_if_downloading(file):
-        print("Checking if download in progress", file=sys.stderr)
-        size = file.stat().st_size
-        time.sleep(1)
-        return size != file.stat().st_size
+def create_loader(data, batch_size=500, validate=False):
+    """Create a dataloader."""
 
-    directory = Path(directory)
-    if not directory.exists():
-        directory.mkdir(parents=True)
-    elif not directory.is_dir():
-        raise ValueError(f'Not a directory: {directory}')
-
-    # get filename from url
-    print("Getting filename", file=sys.stderr)
-    filename = url.split("/")[-1]
-
-    filepath = Path(directory) / Path(filename)
-
-    target_directory = filepath.parent / filepath.stem
-    # if the file isn't there or doesn't have the correct size, download it
-    print("Checking if file already downloaded", file=sys.stderr)
-    download_file = False
-
-    if filepath.exists() or filepath.with_suffix('').exists():
-        pass
+    if isinstance(data, np.ndarray):
+        dataset = data_utils.TensorDataset(
+            *[
+                torch.Tensor(data[:, :2048]),
+                torch.Tensor(data[:, 2048:2058]),
+                torch.Tensor(data[:, 2058:]),
+            ]
+        )
+        if validate:
+            batch_size = data.shape[0]
     else:
-        download_file = True
+        dataset = data_utils.TensorDataset(
+            *[
+                torch.tensor(getattr(data, i)).float()
+                for i in ["lsr", "feats", "scores"]
+            ]
+        )
+        if validate:
+            batch_size = data.lsr.shape[0]
 
-    if download_file:
-        print("Downloading", file=sys.stderr)
-        # urllib.request.urlretrieve(url, filename=filepath)
-        with tqdm(unit='B', unit_scale=True, miniters=1, desc=filename) as t:
-            urllib.request.urlretrieve(url, filename=filepath, reporthook=_reporthook(t))
-        print("Download has finished.", file=sys.stderr)
-
-    print("Extracting {}".format(filepath), file=sys.stderr)
-    return _maybe_extract(filepath, target_directory=target_directory)
-
-
-def _maybe_extract(compressed_path, target_directory=None):
-    """checks if files have already been extracted and extracts them if not"""
-
-    extension = compressed_path.suffix
-
-    if target_directory is None:
-        target_directory = compressed_path.parent / compressed_path.stem
-
-    if not target_directory.exists():
-        if "zip" in extension:
-            with zipfile.ZipFile(compressed_path, "r") as zipped:
-                zipped.extractall(target_directory)
-        else:
-            print("File type not supported", file=sys.stderr)
-
-    print("Done extracting", file=sys.stderr)
-
-    return target_directory
+    loader = data_utils.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    return loader
 
 
-def _reporthook(t):
-    """ ``reporthook`` to use with ``urllib.request`` that prints the process of the download.
-    """
-    last_b = [0]
+def load_features(split=True, nt=False):
+    """Load and combine training data from both train and dev datasets."""
+    trainlsr = np.load("saved_features/train_lsr.npy", allow_pickle=True)
+    trainnlp = np.load("saved_features/train_nlp.npy", allow_pickle=True)
+    trainsc = np.load("saved_features/train_scores.npy", allow_pickle=True)
 
-    def inner(b=1, bsize=1, tsize=None):
-        """
-        Args:
-            b (int, optional): Number of blocks just transferred [default: 1].
-            bsize (int, optional): Size of each block (in tqdm units) [default: 1].
-            tsize (int, optional): Total size (in tqdm units). If [default: None] remains unchanged.
-        """
-        if tsize is not None:
-            t.total = tsize
-        t.update((b - last_b[0]) * bsize)
-        last_b[0] = b
+    devlsr = np.load("saved_features/dev_lsr.npy", allow_pickle=True)
+    devnlp = np.load("saved_features/dev_nlp.npy", allow_pickle=True)
+    devsc = np.load("saved_features/dev_scores.npy", allow_pickle=True)
+    trainlsr = trainlsr.reshape(-1, 2048)
+    devlsr = devlsr.reshape(-1, 2048)
 
-    return inner
+    train = namedtuple("res", ["lsr", "feats", "scores"])(
+        lsr=trainlsr, feats=trainnlp, scores=trainsc
+    )
+    dev = namedtuple("res", ["lsr", "feats", "scores"])(
+        lsr=devlsr, feats=devnlp, scores=devsc
+    )
 
-def save_config(yaml_config, name):
-    """ Writes yaml config to file"""
-    with open(name, 'w') as outfile:
-        yaml.dump(yaml_config, outfile, default_flow_style=False)
+    if split:
+        return train, dev
 
-# Utils sourced fromn Kiwi_viz demo. Available at github.com/unbabel/OpenKiwi/demo/kiwi_viz.ipynb
+    all_train_lsr = np.append(trainlsr, devlsr, axis=0)
+    all_train_nlp = np.append(trainnlp, devnlp, axis=0)
+    all_train_sc = np.append(trainsc, devsc, axis=0)
 
-def printmd(text):
-    display(Markdown(text))
-    
-def make_color(text, color):
-    start = "<span style='color:" + color + "'>"
-    return start + text + "</span>"
-
-
-def get_color(bad_prob, threshold):
-    return 'green' if bad_prob < threshold else 'red'
-
-def highlight(text_bad_prob):
-    text, bad_prob, threshold = text_bad_prob
-    if bad_prob >= threshold:
-        text = '*' + text + '*'
-    return make_color(text, get_color(bad_prob, threshold))
-
-
-def KiwiViz(model, source, mt, threshold=0.5):
-    source = ' '.join(nltk.word_tokenize(source))
-    mt = ' '.join(nltk.word_tokenize(mt))
-    model_out = model.predict({const.SOURCE: [source.lower()], const.TARGET: [mt.lower()]})
-    bad_probs = model_out[const.TARGET_TAGS][0]
-    gap_probs = model_out[const.GAP_TAGS][0]
-    highlight_words = list(map(highlight, zip(mt.split(), bad_probs, [threshold for b in bad_probs])))
-    visualization = ''
-    BAD_GAP = make_color('_', 'red')
-    for gap_prob, word in zip(gap_probs[:-1], highlight_words):
-        visualization += ' ' if gap_prob < threshold else BAD_GAP + ' '
-        visualization += word
-    visualization += '' if gap_probs[-1] < threshold else ' ' + BAD_GAP
-    print('HTER: {}'.format(model_out[const.SENTENCE_SCORES][0]))
-
-    printmd(visualization)
-
+    if nt:
+        res = namedtuple("res", ["lsr", "feats", "scores"])(
+            lsr=all_train_lsr, feats=all_train_nlp, scores=all_train_sc
+        )
+    else:
+        res = np.concatenate(
+            (all_train_lsr, all_train_nlp, all_train_sc.reshape(-1, 1)), axis=1
+        )
+    return res, dev
