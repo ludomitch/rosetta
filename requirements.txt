@@ -8,4 +8,4 @@ spacy==2.2.3
 tensorboard==2.0.1
 textblob==0.15.3
 textblob-de==0.4.3
-torch==1.4.0
+torch==2.2.0
